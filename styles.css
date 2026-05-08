@@ -1,0 +1,281 @@
+:root {
+  color-scheme: dark;
+  --bg: #0f172a;
+  --bg-soft: #1e293b;
+  --panel-border: #334155;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #22c55e;
+  --accent-hover: #16a34a;
+  --empty: #0b1020;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Segoe UI", Roboto, system-ui, sans-serif;
+  background: radial-gradient(circle at top, #1f2937 0%, var(--bg) 45%);
+  color: var(--text);
+}
+
+.app-shell {
+  width: min(1200px, calc(100% - 2rem));
+  margin: 1rem auto 2rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.hero {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+}
+
+.hero p {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) 1fr;
+  gap: 1rem;
+}
+
+.panel {
+  background: rgba(2, 6, 23, 0.85);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.controls-panel h2,
+.canvas-panel h2,
+.future-panel h2 {
+  margin-top: 0;
+  margin-bottom: 0.9rem;
+  font-size: 1.05rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-weight: 600;
+}
+
+.input-row {
+  display: flex;
+  gap: 0.55rem;
+}
+
+input[type="number"],
+select {
+  width: 100%;
+  background: var(--bg-soft);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.55rem 0.6rem;
+}
+
+select {
+  appearance: none;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  padding: 0.55rem 0.9rem;
+  font-weight: 600;
+  color: #052e16;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--accent-hover);
+}
+
+.input-row-submit {
+  margin-top: 0.85rem;
+}
+
+.input-row-submit button {
+  width: 100%;
+}
+
+.ghost-button {
+  color: var(--text);
+  background: var(--bg-soft);
+  border: 1px solid var(--panel-border);
+}
+
+.ghost-button:hover {
+  background: #374151;
+}
+
+.hint {
+  margin: 0.45rem 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.tool-controls {
+  margin-top: 0.85rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.tool-controls.hidden {
+  display: none;
+}
+
+.stats {
+  margin-top: 0.95rem;
+  padding: 0.85rem;
+  border-radius: 8px;
+  background: var(--bg-soft);
+  border: 1px solid #23304a;
+  line-height: 1.45;
+}
+
+.stats strong {
+  color: #bbf7d0;
+}
+
+.panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.panel-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.secondary-button {
+  color: #dbeafe;
+  background: #1d4ed8;
+}
+
+.secondary-button:hover {
+  background: #1e40af;
+}
+
+.grid-wrapper {
+  border: 1px solid #243146;
+  border-radius: 8px;
+  background: #050a18;
+  padding: 0.75rem;
+  overflow: auto;
+  max-height: 65vh;
+}
+
+.circle-grid {
+  --cols: 1;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(8px, 16px));
+  grid-auto-rows: minmax(8px, 16px);
+  gap: 2px;
+  width: max-content;
+}
+
+.cell {
+  border-radius: 2px;
+}
+
+.cell.block {
+  background: linear-gradient(180deg, #4ade80 0%, #15803d 100%);
+}
+
+.cell.empty {
+  background: var(--empty);
+}
+
+.legend {
+  margin: 0.8rem 0 0.35rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.export-status {
+  min-height: 1.2rem;
+  margin: 0.05rem 0 0.35rem;
+  color: #93c5fd;
+  font-size: 0.84rem;
+}
+
+.swatch {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 2px;
+  margin-right: 0.35rem;
+  vertical-align: text-bottom;
+}
+
+.swatch-block {
+  background: #22c55e;
+}
+
+.swatch-empty {
+  background: #111827;
+  border: 1px solid #334155;
+}
+
+.ascii-output {
+  margin: 0.2rem 0 0;
+  padding: 0.65rem;
+  border-radius: 8px;
+  background: #050a18;
+  border: 1px solid #243146;
+  color: #cbd5e1;
+  font-size: 0.66rem;
+  line-height: 1.35;
+  max-height: 22vh;
+  overflow: auto;
+}
+
+.future-services {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.future-card {
+  border: 1px dashed #334155;
+  border-radius: 10px;
+  padding: 0.85rem;
+  background: rgba(15, 23, 42, 0.65);
+}
+
+.future-card h3 {
+  margin: 0;
+  font-size: 0.96rem;
+}
+
+.future-card p {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+@media (max-width: 960px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+}

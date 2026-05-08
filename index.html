@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Minecraft Circle Builder</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="hero">
+      <h1>Minecraft Circle Builder</h1>
+      <p>Génère des cercles, porches et entrées monumentales en blocs Minecraft.</p>
+    </header>
+    <section class="workspace">
+      <aside class="panel controls-panel">
+        <h2>Paramètres</h2>
+        <form id="builder-form" novalidate>
+          <label for="tool-select">Outil</label>
+          <select id="tool-select" name="tool">
+            <option value="circle">Cercle</option>
+            <option value="porch">Porche / Entrée monumentale</option>
+          </select>
+          <div class="tool-controls" data-tool-target="circle">
+            <label for="diameter-input">Diamètre (en blocs)</label>
+            <input id="diameter-input" name="diameter" type="number" min="1" max="256" step="1" value="15" required>
+          </div>
+          <div class="tool-controls hidden" data-tool-target="porch">
+            <label for="porch-width-input">Largeur (en blocs)</label>
+            <input id="porch-width-input" name="porch-width" type="number" min="5" max="101" step="1" value="17" required>
+            <label for="porch-height-input">Hauteur (en blocs)</label>
+            <input id="porch-height-input" name="porch-height" type="number" min="5" max="120" step="1" value="14" required>
+            <label for="porch-style-input">Style du haut</label>
+            <select id="porch-style-input" name="porch-style">
+              <option value="rounded">Arrondi</option>
+              <option value="pointed">En pointe</option>
+              <option value="medieval">Médiéval</option>
+            </select>
+          </div>
+          <div class="input-row input-row-submit">
+            <button type="submit">Générer</button>
+          </div>
+          <p class="hint">Astuce : la largeur du porche est ajustée automatiquement à une valeur impaire pour garder une symétrie propre.</p>
+        </form>
+        <div id="stats" class="stats" aria-live="polite"></div>
+      </aside>
+      <section class="panel canvas-panel">
+        <div class="panel-title-row">
+          <h2>Vue de dessus</h2>
+          <div class="panel-actions">
+            <button id="export-button" type="button" class="secondary-button">Exporter PNG</button>
+            <button id="clear-button" type="button" class="ghost-button">Effacer</button>
+          </div>
+        </div>
+        <div class="grid-wrapper">
+          <div id="circle-grid" class="circle-grid" role="img" aria-label="Grille de construction Minecraft"></div>
+        </div>
+        <p class="legend">
+          <span><i class="swatch swatch-block"></i> Bloc de la structure</span>
+          <span><i class="swatch swatch-empty"></i> Case vide</span>
+        </p>
+        <p id="export-status" class="export-status" aria-live="polite"></p>
+        <pre id="ascii-output" class="ascii-output" aria-label="Aperçu texte de la structure"></pre>
+      </section>
+    </section>
+    <section class="panel future-panel">
+      <h2>Services Minecraft à venir</h2>
+      <div id="future-services" class="future-services"></div>
+    </section>
+  </main>
+  <script src="./app.js" defer></script>
+</body>
+</html>
