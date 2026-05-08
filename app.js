@@ -32,7 +32,10 @@ class MinecraftBuilderStudio {
     this.stats = document.getElementById("stats");
     this.asciiOutput = document.getElementById("ascii-output");
     this.clearButton = document.getElementById("clear-button");
+    this.exportButton = document.getElementById("export-button");
+    this.exportStatus = document.getElementById("export-status");
     this.futureServicesContainer = document.getElementById("future-services");
+    this.currentCells = null;
     this.bindEvents();
     this.renderFutureServices();
     this.syncVisibleControls();
@@ -52,6 +55,10 @@ class MinecraftBuilderStudio {
 
     this.clearButton.addEventListener("click", () => {
       this.clearPreview();
+    });
+
+    this.exportButton.addEventListener("click", () => {
+      this.exportAsPng();
     });
   }
 
@@ -264,6 +271,7 @@ class MinecraftBuilderStudio {
       return;
     }
 
+    this.currentCells = result.cells;
     this.renderGrid(result.cells, result.cols);
     this.renderAscii(result.cells);
     this.updateStats(result.stats);
@@ -306,6 +314,33 @@ class MinecraftBuilderStudio {
     this.grid.replaceChildren();
     this.asciiOutput.textContent = "";
     this.stats.innerHTML = "<div>Aucune structure affichée.</div>";
+    this.currentCells = null;
+  }
+
+  exportAsPng() {
+    if (!this.currentCells || this.currentCells.length === 0) {
+      this.exportStatus.textContent = "Aucune structure à exporter.";
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    const cellSize = 16;
+    canvas.width = this.currentCells[0].length * cellSize;
+    canvas.height = this.currentCells.length * cellSize;
+    const ctx = canvas.getContext('2d');
+
+    this.currentCells.forEach((row, y) => {
+      row.forEach((isBlock, x) => {
+        ctx.fillStyle = isBlock ? '#22c55e' : '#0b1020';
+        ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+      });
+    });
+
+    const link = document.createElement('a');
+    link.download = 'minecraft-structure.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    this.exportStatus.textContent = "PNG exporté avec succès.";
   }
 
   renderFutureServices() {
