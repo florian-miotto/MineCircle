@@ -87,7 +87,7 @@ class MinecraftBuilderStudio {
   syncVisibleControls() {
     const selectedTool = this.toolSelect.value;
     for (const panel of this.toolPanels) {
-      const isCurrentPanel = panel.dataset.toolTarget === selectedTool;
+      const isCurrentPanel = panel.dataset.toolTarget === selectedTool || (selectedTool === "sphere" && panel.dataset.toolTarget === "circle");
       panel.classList.toggle("hidden", !isCurrentPanel);
     }
   }
@@ -114,6 +114,38 @@ class MinecraftBuilderStudio {
     }
 
     return { cells, cols: size, rows: size, blockCount };
+  }
+
+  generateSphereLayers(diameter) {
+    const margin = 2;
+    const size = diameter + margin * 2;
+    const radius = diameter / 2;
+    const center = (size - 1) / 2;
+    const layers = [];
+    let blockCount = 0;
+
+    for (let z = 0; z < diameter; z += 1) {
+      const zDistance = Math.abs(z + margin - center);
+      const layerRadius = Math.sqrt(Math.max(0, radius * radius - zDistance * zDistance));
+      const cells = [];
+
+      for (let y = 0; y < size; y += 1) {
+        const row = [];
+        for (let x = 0; x < size; x += 1) {
+          const distanceToCenter = Math.hypot(x - center, y - center);
+          const isBlock = distanceToCenter <= layerRadius && distanceToCenter > layerRadius - 1;
+          row.push(isBlock);
+          if (isBlock) {
+            blockCount += 1;
+          }
+        }
+        cells.push(row);
+      }
+
+      layers.push(cells);
+    }
+
+    return { layers, cols: size, rows: size, blockCount };
   }
 
   getArchContribution(style, ratioFromCenter, rise, index) {
@@ -263,9 +295,43 @@ class MinecraftBuilderStudio {
     };
   }
 
+  buildSphereResult() {
+    const diameter = this.normalizeInteger(this.circleInput.value, 1, 256);
+    if (!diameter) {
+      this.showMessage("Diamètre invalide. Saisis un entier entre 1 et 256.");
+      return null;
+    }
+
+    this.circleInput.value = String(diameter);
+    const sphere = this.generateSphereLayers(diameter);
+    const midIndex = Math.floor(sphere.layers.length / 2);
+    const layer = sphere.layers[midIndex];
+
+    return {
+      cells: layer,
+      cols: sphere.cols,
+      rows: sphere.rows,
+      stats: [
+        ["Outil", "Sphère"],
+        ["Diamètre", `${diameter} blocs`],
+        ["Couches", `${sphere.layers.length}`],
+        ["Blocs estimés", `~${sphere.blockCount}`],
+        ["Grille affichée", `${sphere.cols} × ${sphere.rows}`]
+      ]
+    };
+  }
+
   drawCurrentTool() {
     const selectedTool = this.toolSelect.value;
-    const result = selectedTool === "porch" ? this.buildPorchResult() : this.buildCircleResult();
+    let result;
+
+    if (selectedTool === "porch") {
+      result = this.buildPorchResult();
+    } else if (selectedTool === "sphere") {
+      result = this.buildSphereResult();
+    } else {
+      result = this.buildCircleResult();
+    }
 
     if (!result) {
       return;
