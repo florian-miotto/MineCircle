@@ -14,14 +14,17 @@
     </header>
     <section class="workspace">
       <aside class="panel controls-panel">
-        <h2>Paramètres</h2>
-        <form id="builder-form" novalidate>
-          <label for="tool-select">Outil</label>
+        <div class="tool-selector-section">
+          <h2>Sélectionnez un outil</h2>
           <select id="tool-select" name="tool">
             <option value="circle">Cercle</option>
             <option value="sphere">Sphère</option>
             <option value="porch">Porche / Entrée monumentale</option>
           </select>
+        </div>
+        <div class="tool-settings-section">
+          <h3>Paramètres</h3>
+          <form id="builder-form" novalidate>
           <div class="tool-controls" data-tool-target="circle">
             <label for="diameter-input">Diamètre (en blocs)</label>
             <input id="diameter-input" name="diameter" type="number" min="1" max="256" step="1" value="15" required>
