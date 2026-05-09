@@ -26,6 +26,12 @@
             <label for="diameter-input">Diamètre (en blocs)</label>
             <input id="diameter-input" name="diameter" type="number" min="1" max="256" step="1" value="15" required>
           </div>
+          <div class="tool-controls hidden" data-tool-target="sphere">
+            <label for="sphere-layer-input">Couche de la sphère</label>
+            <input id="sphere-layer-input" type="range" min="1" max="1" step="1" value="1">
+            <p id="sphere-layer-label" class="sphere-layer-label">Couche 1 / 1</p>
+            <p class="hint">Faites glisser pour voir chaque coupe de la sphère.</p>
+          </div>
           <div class="tool-controls hidden" data-tool-target="porch">
             <label for="porch-width-input">Largeur (en blocs)</label>
             <input id="porch-width-input" name="porch-width" type="number" min="5" max="101" step="1" value="17" required>

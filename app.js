@@ -34,8 +34,12 @@ class MinecraftBuilderStudio {
     this.clearButton = document.getElementById("clear-button");
     this.exportButton = document.getElementById("export-button");
     this.exportStatus = document.getElementById("export-status");
+    this.sphereLayerSlider = document.getElementById("sphere-layer-input");
+    this.sphereLayerLabel = document.getElementById("sphere-layer-label");
     this.futureServicesContainer = document.getElementById("future-services");
     this.currentCells = null;
+    this.sphereLayers = null;
+    this.currentSphereLayerIndex = 0;
     this.bindEvents();
     this.renderFutureServices();
     this.syncVisibleControls();
@@ -59,6 +63,14 @@ class MinecraftBuilderStudio {
 
     this.exportButton.addEventListener("click", () => {
       this.exportAsPng();
+    });
+
+    this.sphereLayerSlider.addEventListener("input", () => {
+      if (!this.sphereLayers) {
+        return;
+      }
+      this.currentSphereLayerIndex = Number(this.sphereLayerSlider.value) - 1;
+      this.renderSphereLayer();
     });
   }
 
@@ -87,7 +99,12 @@ class MinecraftBuilderStudio {
   syncVisibleControls() {
     const selectedTool = this.toolSelect.value;
     for (const panel of this.toolPanels) {
-      const isCurrentPanel = panel.dataset.toolTarget === selectedTool || (selectedTool === "sphere" && panel.dataset.toolTarget === "circle");
+      let isCurrentPanel = false;
+      if (panel.dataset.toolTarget === "circle") {
+        isCurrentPanel = selectedTool === "circle" || selectedTool === "sphere";
+      } else {
+        isCurrentPanel = panel.dataset.toolTarget === selectedTool;
+      }
       panel.classList.toggle("hidden", !isCurrentPanel);
     }
   }
@@ -304,17 +321,21 @@ class MinecraftBuilderStudio {
 
     this.circleInput.value = String(diameter);
     const sphere = this.generateSphereLayers(diameter);
-    const midIndex = Math.floor(sphere.layers.length / 2);
-    const layer = sphere.layers[midIndex];
+    this.sphereLayers = sphere.layers;
+    this.currentSphereLayerIndex = Math.floor(sphere.layers.length / 2);
+    this.sphereLayerSlider.max = String(sphere.layers.length);
+    this.sphereLayerSlider.value = String(this.currentSphereLayerIndex + 1);
+    this.sphereLayerLabel.textContent = `Couche ${this.currentSphereLayerIndex + 1} / ${sphere.layers.length}`;
 
     return {
-      cells: layer,
+      cells: sphere.layers[this.currentSphereLayerIndex],
       cols: sphere.cols,
       rows: sphere.rows,
       stats: [
         ["Outil", "Sphère"],
         ["Diamètre", `${diameter} blocs`],
         ["Couches", `${sphere.layers.length}`],
+        ["Couche actuelle", `${this.currentSphereLayerIndex + 1}`],
         ["Blocs estimés", `~${sphere.blockCount}`],
         ["Grille affichée", `${sphere.cols} × ${sphere.rows}`]
       ]
@@ -359,6 +380,23 @@ class MinecraftBuilderStudio {
     this.grid.appendChild(fragment);
   }
 
+  renderSphereLayer() {
+    if (!this.sphereLayers) {
+      return;
+    }
+    const layer = this.sphereLayers[this.currentSphereLayerIndex];
+    this.currentCells = layer;
+    this.renderGrid(layer, layer[0].length);
+    this.renderAscii(layer);
+    this.updateSphereLayerLabel();
+  }
+
+  updateSphereLayerLabel() {
+    const layerNumber = this.currentSphereLayerIndex + 1;
+    const total = this.sphereLayers ? this.sphereLayers.length : 1;
+    this.sphereLayerLabel.textContent = `Couche ${layerNumber} / ${total}`;
+  }
+
   renderAscii(cells) {
     const lines = cells.map((row) => row.map((isBlock) => (isBlock ? "■" : "·")).join(" "));
     this.asciiOutput.textContent = lines.join("\n");
@@ -381,6 +419,8 @@ class MinecraftBuilderStudio {
     this.asciiOutput.textContent = "";
     this.stats.innerHTML = "<div>Aucune structure affichée.</div>";
     this.currentCells = null;
+    this.sphereLayers = null;
+    this.currentSphereLayerIndex = 0;
   }
 
   exportAsPng() {
