@@ -20,6 +20,7 @@
             <option value="circle">Cercle</option>
             <option value="sphere">Sphère</option>
             <option value="porch">Porche / Entrée monumentale</option>
+            <option value="stairs">Escalier</option>
           </select>
         </div>
         <div class="tool-settings-section">
@@ -47,10 +48,22 @@
               <option value="medieval">Médiéval</option>
             </select>
           </div>
+          <div class="tool-controls hidden" data-tool-target="stairs">
+            <label for="stairs-height-input">Hauteur totale (en blocs)</label>
+            <input id="stairs-height-input" name="stairs-height" type="number" min="1" max="128" step="1" value="12" required>
+            <label for="stairs-width-input">Largeur (en blocs)</label>
+            <input id="stairs-width-input" name="stairs-width" type="number" min="1" max="16" step="1" value="5" required>
+            <label for="stairs-type-input">Type d'escalier</label>
+            <select id="stairs-type-input" name="stairs-type">
+              <option value="straight">Tout droit</option>
+              <option value="spiral">En colimaçon</option>
+              <option value="curved">Arrondi</option>
+            </select>
+          </div>
           <div class="input-row input-row-submit">
             <button type="submit">Générer</button>
           </div>
-          <p class="hint">Astuce : la largeur du porche est ajustée automatiquement à une valeur impaire pour garder une symétrie propre.</p>
+          <p id="tool-hint" class="hint">Astuce : la largeur du porche est ajustée automatiquement à une valeur impaire pour garder une symétrie propre.</p>
         </form>
         <div id="stats" class="stats" aria-live="polite"></div>
       </aside>
@@ -65,8 +78,26 @@
         <div class="grid-wrapper">
           <div id="circle-grid" class="circle-grid" role="img" aria-label="Grille de construction Minecraft"></div>
         </div>
+        <div id="stairs-details" class="stairs-details hidden" aria-live="polite">
+          <div class="detail-block detail-block-3d">
+            <h3>Vue 3D</h3>
+            <div id="stairs-3d-view" class="stairs-3d-view" role="img" aria-label="Vue 3D de l'escalier"></div>
+            <p id="stairs-3d-status" class="three-status"></p>
+          </div>
+          <div class="detail-block">
+            <h3>Vue de côté</h3>
+            <div class="grid-wrapper detail-grid-wrapper">
+              <div id="side-grid" class="circle-grid side-grid" role="img" aria-label="Vue de côté de l'escalier"></div>
+            </div>
+          </div>
+          <div class="detail-block">
+            <h3>Étape par étape</h3>
+            <ol id="build-steps" class="build-steps"></ol>
+          </div>
+        </div>
         <p class="legend">
-          <span><i class="swatch swatch-block"></i> Bloc de la structure</span>
+          <span><i class="swatch swatch-slab"></i> Dalle / marche</span>
+          <span><i class="swatch swatch-core"></i> Bloc plein / pilier</span>
           <span><i class="swatch swatch-empty"></i> Case vide</span>
         </p>
         <p id="export-status" class="export-status" aria-live="polite"></p>
@@ -78,6 +109,7 @@
       <div id="future-services" class="future-services"></div>
     </section>
   </main>
+  <script src="./vendor/three.min.js" defer></script>
   <script src="./app.js" defer></script>
 </body>
 </html>
