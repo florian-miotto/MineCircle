@@ -7,7 +7,9 @@ Petit site web pour aider à construire des structures Minecraft en vue de dessu
 - Génération de porche/entrée monumentale (largeur, hauteur, style du haut)
 - Styles de sommet pour porche : arrondi, en pointe, médiéval
 - Génération d'escalier tout droit, en colimaçon ou arrondi (hauteur totale, largeur)
+- Sens gauche/droite pour les escaliers arrondis
 - Escaliers basés sur des dalles Minecraft : 2 dalles = 1 bloc de hauteur
+- Supports de sécurité en bordure des dalles, visibles en bleu, pour garder un passage sous l'escalier
 - Vue de dessus, vue de côté, aperçu 3D zoomable et étapes de construction pour les escaliers
 - Affichage visuel + aperçu texte
 - Base d'interface prévue pour accueillir d'autres services Minecraft

@@ -1,6 +1,6 @@
 const FUTURE_SERVICES = [
   {
-    title: "Dômes / Sphères",
+    title: "Dômes",
     description: "Étendre les générateurs en 3D pour les projets monumentaux."
   },
   {
@@ -25,6 +25,11 @@ const STAIR_TYPE_LABELS = Object.freeze({
   curved: "Arrondi"
 });
 
+const CURVED_DIRECTION_LABELS = Object.freeze({
+  right: "Droite",
+  left: "Gauche"
+});
+
 const TOOL_HINTS = Object.freeze({
   circle: "Astuce : le diamètre contrôle le contour extérieur de la forme.",
   sphere: "Astuce : utilisez le curseur pour parcourir les couches horizontales de la sphère.",
@@ -43,6 +48,7 @@ class MinecraftBuilderStudio {
     this.stairsHeightInput = document.getElementById("stairs-height-input");
     this.stairsWidthInput = document.getElementById("stairs-width-input");
     this.stairsTypeInput = document.getElementById("stairs-type-input");
+    this.stairsTurnInput = document.getElementById("stairs-turn-input");
     this.toolHint = document.getElementById("tool-hint");
     this.toolPanels = Array.from(document.querySelectorAll("[data-tool-target]"));
     this.grid = document.getElementById("circle-grid");
@@ -287,6 +293,15 @@ class MinecraftBuilderStudio {
     };
   }
 
+  createSupportCell() {
+    return {
+      block: true,
+      kind: "support",
+      label: "",
+      title: "Remplissage de sécurité"
+    };
+  }
+
   createBlock3d(x, y, z, kind = "slab", width = 1, height = 0.5, depth = 1, rotationY = 0) {
     return { x, y, z, kind, width, height, depth, rotationY };
   }
@@ -297,6 +312,28 @@ class MinecraftBuilderStudio {
 
   getSlabCenterY(step) {
     return (step - 1) * 0.5 + 0.25;
+  }
+
+  getSlabBottomY(step) {
+    return (step - 1) * 0.5;
+  }
+
+  getSupportUnitCount(height) {
+    return Math.ceil(height * 2);
+  }
+
+  createSupportColumnBlocks(x, z, height) {
+    if (height <= 0) {
+      return [];
+    }
+    const blocks = [];
+    const halfUnits = this.getSupportUnitCount(height);
+
+    for (let unit = 0; unit < halfUnits; unit += 1) {
+      blocks.push(this.createBlock3d(x, unit * 0.5 + 0.25, z, "support", 0.88, 0.5, 0.88));
+    }
+
+    return blocks;
   }
 
   createCoreBlocks(height, x = 0, z = 0) {
@@ -316,17 +353,23 @@ class MinecraftBuilderStudio {
     const buildPlan = [];
     const blocks3d = [];
     const xOffset = (width - 1) / 2;
+    let supportUnitCount = 0;
 
     for (let step = 1; step <= stepCount; step += 1) {
       const row = rows - margin - step;
+      const supportHeight = this.getSlabBottomY(step);
       for (let x = 0; x < width; x += 1) {
         cells[row][x + margin] = this.createStepCell(step);
-        blocks3d.push(this.createBlock3d(x - xOffset, this.getSlabCenterY(step), step - 1));
+        const x3d = x - xOffset;
+        const supportBlocks = this.createSupportColumnBlocks(x3d, step - 1, supportHeight);
+        blocks3d.push(...supportBlocks);
+        supportUnitCount += supportBlocks.length;
+        blocks3d.push(this.createBlock3d(x3d, this.getSlabCenterY(step), step - 1));
       }
       buildPlan.push({
         level: step,
         label: `Dalle ${step}`,
-        detail: `Pose ${width} dalle${width > 1 ? "s" : ""} à ${this.formatHalfBlockHeight(step)}, puis avance d'un bloc.`
+        detail: `Pose ${width} dalle${width > 1 ? "s" : ""} à ${this.formatHalfBlockHeight(step)}, avec le remplissage dessous jusqu'au sol.`
       });
     }
 
@@ -334,7 +377,7 @@ class MinecraftBuilderStudio {
       cells,
       cols,
       rows,
-      blockCount: stepCount * width,
+      blockCount: stepCount * width + supportUnitCount,
       footprint: `${width} × ${stepCount}`,
       sideCells: this.generateStairsSideView(height, stepCount, type),
       blocks3d,
@@ -345,7 +388,10 @@ class MinecraftBuilderStudio {
   generateSpiralStairsGrid(height, width) {
     const walkwayWidth = Math.max(1, width);
     const stepCount = this.getStairStepCount(height);
-    const footprint = Math.max(walkwayWidth * 2 + 3, 5);
+    const innerRadius = 1.35;
+    const turnPerStep = Math.PI / 4;
+    const gridRadius = Math.ceil(innerRadius + walkwayWidth + 0.85);
+    const footprint = gridRadius * 2 + 1;
     const center = Math.floor(footprint / 2);
     const margin = 2;
     const cols = footprint + margin * 2;
@@ -353,27 +399,38 @@ class MinecraftBuilderStudio {
     const cells = Array.from({ length: rows }, () => Array(cols).fill(false));
     const buildPlan = [];
     const blocks3d = this.createCoreBlocks(height + 1);
-    const innerRadius = 1.25;
-    const turnPerStep = Math.PI / 4;
+    const placements = [];
+    let supportUnitCount = 0;
     cells[center + margin][center + margin] = this.createCoreCell("P");
 
     for (let step = 1; step <= stepCount; step += 1) {
       const angle = -Math.PI / 2 + (step - 1) * turnPerStep;
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
+      const sectorStart = angle - turnPerStep * 0.55;
+      const sectorEnd = angle + turnPerStep * 0.55;
+      const supportHeight = this.getSlabBottomY(step);
+      const stepPositions = this.getSpiralStepPositions(
+        gridRadius,
+        innerRadius,
+        walkwayWidth,
+        sectorStart,
+        sectorEnd,
+        angle
+      );
 
-      for (let band = 0; band < walkwayWidth; band += 1) {
-        const radius = innerRadius + band;
-        const x3d = cos * radius;
-        const z3d = sin * radius;
-        const projectionX = center + Math.round(cos * (band + 1));
-        const projectionY = center + Math.round(sin * (band + 1));
+      for (const position of stepPositions) {
+        const projectionX = center + position.x;
+        const projectionY = center + position.z;
+        cells[projectionY + margin][projectionX + margin] = this.createStepCell(step);
 
-        if (projectionX >= 0 && projectionX < footprint && projectionY >= 0 && projectionY < footprint) {
-          cells[projectionY + margin][projectionX + margin] = this.createStepCell(step);
+        if (position.support) {
+          const supportBlocks = this.createSupportColumnBlocks(position.x, position.z, supportHeight);
+          blocks3d.push(...supportBlocks);
+          supportUnitCount += supportBlocks.length;
         }
-
-        blocks3d.push(this.createBlock3d(x3d, this.getSlabCenterY(step), z3d));
+        blocks3d.push(this.createBlock3d(position.x, this.getSlabCenterY(step), position.z));
+        placements.push({ step, x: position.x, z: position.z, support: position.support });
       }
 
       const sideLabel = this.getSpiralPositionLabel(
@@ -384,11 +441,11 @@ class MinecraftBuilderStudio {
       buildPlan.push({
         level: step,
         label: `Dalle ${step}`,
-        detail: `Pose une bande de ${walkwayWidth} dalle${walkwayWidth > 1 ? "s" : ""} à ${this.formatHalfBlockHeight(step)}, ${sideLabel} du pilier, rotation ${quarterTurn}°.`
+        detail: `Pose une plateforme de ${stepPositions.length} dalle${stepPositions.length > 1 ? "s" : ""} à ${this.formatHalfBlockHeight(step)}, ${sideLabel} du pilier, puis mets les supports seulement en bordure.`
       });
     }
 
-    const blockCount = stepCount * walkwayWidth + height + 1;
+    const blockCount = placements.length + height + 1 + supportUnitCount;
 
     return {
       cells,
@@ -396,37 +453,106 @@ class MinecraftBuilderStudio {
       rows,
       blockCount,
       footprint: `${footprint} × ${footprint}`,
-      sideCells: this.generateStairsSideView(height, stepCount, "spiral"),
+      sideCells: this.generateStairsSideView(height, stepCount, "spiral", walkwayWidth, placements),
       blocks3d,
       buildPlan
     };
   }
 
-  generateCurvedStairsGrid(height, width) {
+  getSpiralStepPositions(gridRadius, innerRadius, walkwayWidth, sectorStart, sectorEnd, centerAngle) {
+    const positions = new Map();
+    const outerRadius = innerRadius + walkwayWidth + 0.35;
+
+    for (let z = -gridRadius; z <= gridRadius; z += 1) {
+      for (let x = -gridRadius; x <= gridRadius; x += 1) {
+        const radius = Math.hypot(x, z);
+        if (radius < innerRadius || radius > outerRadius) {
+          continue;
+        }
+        const angle = Math.atan2(z, x);
+        if (this.isAngleBetween(angle, sectorStart, sectorEnd)) {
+          positions.set(`${x},${z}`, { x, z });
+        }
+      }
+    }
+
+    const cos = Math.cos(centerAngle);
+    const sin = Math.sin(centerAngle);
+    for (let band = 0; band < walkwayWidth; band += 1) {
+      const radius = innerRadius + band + 0.2;
+      const x = Math.round(cos * radius);
+      const z = Math.round(sin * radius);
+      positions.set(`${x},${z}`, { x, z });
+    }
+
+    const result = Array.from(positions.values());
+    const radii = result.map((position) => Math.hypot(position.x, position.z));
+    const minRadius = Math.min(...radii);
+    const maxRadius = Math.max(...radii);
+
+    for (const position of result) {
+      const radius = Math.hypot(position.x, position.z);
+      position.support = radius <= minRadius + 0.45 || radius >= maxRadius - 0.45;
+    }
+
+    return result.sort((a, b) => {
+      const angleA = this.normalizeAngle(Math.atan2(a.z, a.x) - centerAngle);
+      const angleB = this.normalizeAngle(Math.atan2(b.z, b.x) - centerAngle);
+      return Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z) || angleA - angleB;
+    });
+  }
+
+  normalizeAngle(angle) {
+    let normalized = angle;
+    while (normalized <= -Math.PI) {
+      normalized += Math.PI * 2;
+    }
+    while (normalized > Math.PI) {
+      normalized -= Math.PI * 2;
+    }
+    return normalized;
+  }
+
+  isAngleBetween(angle, start, end) {
+    const normalizedAngle = this.normalizeAngle(angle - start);
+    const normalizedEnd = this.normalizeAngle(end - start);
+    return normalizedAngle >= 0 && normalizedAngle <= normalizedEnd;
+  }
+
+  generateCurvedStairsGrid(height, width, direction) {
     const stepCount = this.getStairStepCount(height);
     const footprint = Math.max(width * 2 + stepCount, 7);
     const margin = 2;
     const cols = footprint + margin * 2;
     const rows = footprint + margin * 2;
     const cells = Array.from({ length: rows }, () => Array(cols).fill(false));
-    const center = footprint - width - 1;
+    const pivotX = direction === "right" ? width : footprint - width - 1;
+    const pivotY = footprint - width - 1;
     const radius = Math.max(width + 1, Math.round(footprint * 0.55));
+    const mirror = direction === "right" ? -1 : 1;
     const angleStart = Math.PI;
     const angleEnd = Math.PI * 1.5;
     const buildPlan = [];
     const blocks3d = [];
+    let supportUnitCount = 0;
 
     for (let step = 1; step <= stepCount; step += 1) {
       const ratio = stepCount === 1 ? 0 : (step - 1) / (stepCount - 1);
       const angle = angleStart + (angleEnd - angleStart) * ratio;
+      const supportHeight = this.getSlabBottomY(step);
 
       for (let band = 0; band < width; band += 1) {
         const currentRadius = radius - band;
-        const x = Math.round(center + Math.cos(angle) * currentRadius);
-        const y = Math.round(center + Math.sin(angle) * currentRadius);
+        const x = Math.round(pivotX + Math.cos(angle) * currentRadius * mirror);
+        const y = Math.round(pivotY + Math.sin(angle) * currentRadius);
         if (x >= 0 && x < footprint && y >= 0 && y < footprint) {
           cells[y + margin][x + margin] = this.createStepCell(step);
-          blocks3d.push(this.createBlock3d(x - center, this.getSlabCenterY(step), y - center));
+          const x3d = x - pivotX;
+          const z3d = y - pivotY;
+          const supportBlocks = this.createSupportColumnBlocks(x3d, z3d, supportHeight);
+          blocks3d.push(...supportBlocks);
+          supportUnitCount += supportBlocks.length;
+          blocks3d.push(this.createBlock3d(x3d, this.getSlabCenterY(step), z3d));
         }
       }
 
@@ -434,14 +560,14 @@ class MinecraftBuilderStudio {
       buildPlan.push({
         level: step,
         label: `Dalle ${step}`,
-        detail: `Pose une bande de ${width} dalle${width > 1 ? "s" : ""} à ${this.formatHalfBlockHeight(step)}, environ ${turn}° après le départ de la courbe.`
+        detail: `Pose une bande de ${width} dalle${width > 1 ? "s" : ""} à ${this.formatHalfBlockHeight(step)}, en arrondissant vers la ${CURVED_DIRECTION_LABELS[direction].toLowerCase()}.`
       });
     }
 
     const blockCount = cells.reduce(
       (total, row) => total + row.filter((cell) => this.isBlockCell(cell)).length,
       0
-    );
+    ) + supportUnitCount;
 
     return {
       cells,
@@ -478,7 +604,11 @@ class MinecraftBuilderStudio {
     return "autour";
   }
 
-  generateStairsSideView(height, length, type) {
+  generateStairsSideView(height, length, type, width = 1, placements = []) {
+    if (type === "spiral") {
+      return this.generateSpiralSideView(height, length, width, placements);
+    }
+
     const margin = 2;
     const cols = length + margin * 2;
     const rows = this.getStairStepCount(height) + margin * 2;
@@ -488,16 +618,46 @@ class MinecraftBuilderStudio {
     for (let step = 1; step <= length; step += 1) {
       const col = margin + Math.min(length - 1, step - 1);
       const row = baseline - (step - 1);
+      for (let supportRow = row + 1; supportRow <= baseline; supportRow += 1) {
+        cells[supportRow][col] = this.createSupportCell();
+      }
       cells[row][col] = this.createStepCell(step);
     }
 
-    if (type === "spiral") {
-      for (let row = margin; row <= baseline; row += 2) {
-        cells[row][margin] = this.createCoreCell("P");
-        if (row + 1 <= baseline) {
-          cells[row + 1][margin] = this.createCoreCell("");
+    return cells;
+  }
+
+  generateSpiralSideView(height, stepCount, width, placements) {
+    const margin = 2;
+    const maxOffset = Math.max(
+      width + 2,
+      ...placements.map((placement) => Math.abs(placement.x))
+    );
+    const sideSpan = maxOffset * 2 + 3;
+    const cols = sideSpan + margin * 2;
+    const rows = this.getStairStepCount(height) + margin * 2;
+    const cells = Array.from({ length: rows }, () => Array(cols).fill(false));
+    const baseline = rows - margin - 1;
+    const centerCol = margin + maxOffset + 1;
+
+    for (let row = margin; row <= baseline; row += 1) {
+      cells[row][centerCol] = this.createCoreCell(row === margin ? "P" : "");
+    }
+
+    for (const placement of placements) {
+      const row = baseline - (placement.step - 1);
+      const col = centerCol + placement.x;
+      if (col < 0 || col >= cols || row < 0 || row >= rows || col === centerCol) {
+        continue;
+      }
+      if (placement.support) {
+        for (let supportRow = row + 1; supportRow <= baseline; supportRow += 1) {
+          if (!cells[supportRow][col]) {
+            cells[supportRow][col] = this.createSupportCell();
+          }
         }
       }
+      cells[row][col] = this.createStepCell(placement.step);
     }
 
     return cells;
@@ -578,9 +738,11 @@ class MinecraftBuilderStudio {
     const height = this.normalizeInteger(this.stairsHeightInput.value, 1, 128);
     const width = this.normalizeInteger(this.stairsWidthInput.value, 1, 16);
     const type = this.stairsTypeInput.value;
+    const curvedDirection = this.stairsTurnInput.value;
     const hasType = Object.prototype.hasOwnProperty.call(STAIR_TYPE_LABELS, type);
+    const hasCurvedDirection = Object.prototype.hasOwnProperty.call(CURVED_DIRECTION_LABELS, curvedDirection);
 
-    if (!height || !width || !hasType) {
+    if (!height || !width || !hasType || !hasCurvedDirection) {
       this.showMessage("Paramètres d'escalier invalides. Vérifie hauteur, largeur et type.");
       return null;
     }
@@ -589,10 +751,24 @@ class MinecraftBuilderStudio {
     const stairs = type === "spiral"
       ? this.generateSpiralStairsGrid(height, width)
       : type === "curved"
-        ? this.generateCurvedStairsGrid(height, width)
+        ? this.generateCurvedStairsGrid(height, width, curvedDirection)
         : this.generateStraightStairsGrid(height, width, type);
 
     this.stairsWidthInput.value = String(width);
+    const stats = [
+      ["Outil", "Escalier"],
+      ["Type", STAIR_TYPE_LABELS[type]],
+      ["Hauteur totale", `${height} blocs`],
+      ["Largeur", `${this.stairsWidthInput.value} blocs`],
+      ["Dalles à monter", `${this.getStairStepCount(height)}`],
+      ["Emprise au sol", stairs.footprint],
+      ["Blocs estimés", `~${stairs.blockCount}`],
+      ["Grille affichée", `${stairs.cols} × ${stairs.rows}`]
+    ];
+
+    if (type === "curved") {
+      stats.splice(2, 0, ["Sens de l'arrondi", CURVED_DIRECTION_LABELS[curvedDirection]]);
+    }
 
     return {
       cells: stairs.cells,
@@ -601,16 +777,7 @@ class MinecraftBuilderStudio {
       sideCells: stairs.sideCells,
       buildPlan: stairs.buildPlan,
       blocks3d: stairs.blocks3d,
-      stats: [
-        ["Outil", "Escalier"],
-        ["Type", STAIR_TYPE_LABELS[type]],
-        ["Hauteur totale", `${height} blocs`],
-        ["Largeur", `${this.stairsWidthInput.value} blocs`],
-        ["Dalles à monter", `${this.getStairStepCount(height)}`],
-        ["Emprise au sol", stairs.footprint],
-        ["Blocs estimés", `~${stairs.blockCount}`],
-        ["Grille affichée", `${stairs.cols} × ${stairs.rows}`]
-      ]
+      stats
     };
   }
 
@@ -875,15 +1042,16 @@ class MinecraftBuilderStudio {
     const THREE = window.THREE;
     const { scene, camera, renderer, group } = this.threeState;
     group.clear();
+    const centeredBlocks = this.centerBlocksForThreeView(blocks);
 
-    const maxY = blocks.reduce((max, block) => Math.max(max, block.y + block.height / 2), 1);
-    const maxRadius = blocks.reduce((max, block) => {
+    const maxY = centeredBlocks.reduce((max, block) => Math.max(max, block.y + block.height / 2), 1);
+    const maxRadius = centeredBlocks.reduce((max, block) => {
       const radius = Math.hypot(block.x, block.z) + Math.max(block.width, block.depth);
       return Math.max(max, radius);
     }, 3);
-    const showEdges = blocks.length <= 900;
+    const showEdges = centeredBlocks.length <= 900;
 
-    for (const block of blocks) {
+    for (const block of centeredBlocks) {
       this.addMinecraftBox(group, block, showEdges);
     }
 
@@ -908,6 +1076,33 @@ class MinecraftBuilderStudio {
     this.threeStatus.textContent = "Glissez pour tourner. Utilisez la molette pour zoomer.";
   }
 
+  centerBlocksForThreeView(blocks) {
+    if (!blocks || blocks.length === 0) {
+      return [];
+    }
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+
+    for (const block of blocks) {
+      minX = Math.min(minX, block.x - block.width / 2);
+      maxX = Math.max(maxX, block.x + block.width / 2);
+      minZ = Math.min(minZ, block.z - block.depth / 2);
+      maxZ = Math.max(maxZ, block.z + block.depth / 2);
+    }
+
+    const centerX = (minX + maxX) / 2;
+    const centerZ = (minZ + maxZ) / 2;
+
+    return blocks.map((block) => ({
+      ...block,
+      x: block.x - centerX,
+      z: block.z - centerZ
+    }));
+  }
+
   addMinecraftBox(group, block, showEdges) {
     const THREE = window.THREE;
     const geometry = new THREE.BoxGeometry(block.width, block.height, block.depth);
@@ -923,7 +1118,7 @@ class MinecraftBuilderStudio {
       return;
     }
 
-    const edgeColor = block.kind === "core" ? 0x1f2937 : 0x3f2a12;
+    const edgeColor = block.kind === "core" ? 0x1f2937 : block.kind === "support" ? 0x083344 : 0x3f2a12;
     const edges = new THREE.LineSegments(
       new THREE.EdgesGeometry(geometry),
       new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: 0.44 })
@@ -942,14 +1137,17 @@ class MinecraftBuilderStudio {
 
     const palettes = {
       core: ["#6b7280", "#4b5563", "#9ca3af", "#374151"],
-      support: ["#6b7280", "#4b5563", "#9ca3af", "#374151"],
+      support: ["#38bdf8", "#0e7490", "#67e8f9", "#155e75"],
       slab: ["#b7791f", "#92400e", "#d97706", "#78350f"]
     };
     const texture = this.createPixelTexture(palettes[cacheKey] || palettes.slab);
     const material = new THREE.MeshStandardMaterial({
       map: texture,
       roughness: 0.92,
-      metalness: 0
+      metalness: 0,
+      transparent: cacheKey === "support",
+      opacity: cacheKey === "support" ? 0.3 : 1,
+      depthWrite: cacheKey !== "support"
     });
     this.threeState.materials.set(cacheKey, material);
     return material;
@@ -1077,6 +1275,9 @@ class MinecraftBuilderStudio {
         }
         if (this.getCellKind(cell) === 'core') {
           ctx.fillStyle = '#64748b';
+        }
+        if (this.getCellKind(cell) === 'support') {
+          ctx.fillStyle = '#38bdf8';
         }
         ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
         const label = this.getCellLabel(cell);

@@ -284,6 +284,13 @@ button:hover {
   color: #f8fafc;
 }
 
+.cell.support {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0 48%, transparent 48%),
+    linear-gradient(180deg, rgba(56, 189, 248, 0.72) 0%, rgba(14, 116, 144, 0.62) 100%);
+  color: #dff9ff;
+}
+
 .cell.empty {
   background: var(--empty);
 }
@@ -410,6 +417,10 @@ button:hover {
 
 .swatch-core {
   background: #64748b;
+}
+
+.swatch-support {
+  background: rgba(56, 189, 248, 0.75);
 }
 
 .swatch-empty {

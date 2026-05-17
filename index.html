@@ -59,6 +59,11 @@
               <option value="spiral">En colimaçon</option>
               <option value="curved">Arrondi</option>
             </select>
+            <label for="stairs-turn-input">Sens de l'arrondi</label>
+            <select id="stairs-turn-input" name="stairs-turn">
+              <option value="right">Droite</option>
+              <option value="left">Gauche</option>
+            </select>
           </div>
           <div class="input-row input-row-submit">
             <button type="submit">Générer</button>
@@ -98,6 +103,7 @@
         <p class="legend">
           <span><i class="swatch swatch-slab"></i> Dalle / marche</span>
           <span><i class="swatch swatch-core"></i> Bloc plein / pilier</span>
+          <span><i class="swatch swatch-support"></i> Remplissage sécurité</span>
           <span><i class="swatch swatch-empty"></i> Case vide</span>
         </p>
         <p id="export-status" class="export-status" aria-live="polite"></p>
