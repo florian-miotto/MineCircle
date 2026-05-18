@@ -311,10 +311,10 @@ class MinecraftBuilderStudio {
       const profileX = openingLeft + x;
       let openingHeight = outerProfile[profileX] - thickness;
       if (profileX > 0 && outerProfile[profileX - 1] < outerProfile[profileX]) {
-        openingHeight = Math.min(openingHeight, outerProfile[profileX - 1]);
+        openingHeight = Math.min(openingHeight, outerProfile[profileX - 1] - thickness);
       }
       if (profileX < width - 1 && outerProfile[profileX + 1] < outerProfile[profileX]) {
-        openingHeight = Math.min(openingHeight, outerProfile[profileX + 1]);
+        openingHeight = Math.min(openingHeight, outerProfile[profileX + 1] - thickness);
       }
       openingHeight = Math.max(1, openingHeight);
       for (let y = 0; y < openingHeight; y += 1) {
@@ -596,9 +596,39 @@ class MinecraftBuilderStudio {
     const blocks3d = [];
     let supportUnitCount = 0;
 
+    const stepsByLevel = Array.from({ length: stepCount + 1 }, () => new Map());
+    const innerRadius = radius - width + 0.25;
+    const outerRadius = radius + 0.75;
+    const totalAngle = angleEnd - angleStart;
+
+    for (let y = 0; y < footprint; y += 1) {
+      for (let x = 0; x < footprint; x += 1) {
+        const normalizedX = (x - pivotX) * mirror;
+        const normalizedY = y - pivotY;
+        const distance = Math.hypot(normalizedX, normalizedY);
+
+        if (distance < innerRadius || distance > outerRadius) {
+          continue;
+        }
+
+        let angle = Math.atan2(normalizedY, normalizedX);
+        if (angle < 0) {
+          angle += Math.PI * 2;
+        }
+
+        if (angle < angleStart || angle > angleEnd) {
+          continue;
+        }
+
+        const angleRatio = totalAngle === 0 ? 0 : (angle - angleStart) / totalAngle;
+        const step = Math.max(1, Math.min(stepCount, Math.floor(angleRatio * stepCount) + 1));
+        stepsByLevel[step].set(`${x},${y}`, { x, y });
+      }
+    }
+
     for (let step = 1; step <= stepCount; step += 1) {
       const ratio = stepCount === 1 ? 0 : (step - 1) / (stepCount - 1);
-      const angle = angleStart + (angleEnd - angleStart) * ratio;
+      const angle = angleStart + totalAngle * ratio;
       const supportHeight = this.getSlabBottomY(step);
 
       for (let band = 0; band < width; band += 1) {
@@ -606,14 +636,18 @@ class MinecraftBuilderStudio {
         const x = Math.round(pivotX + Math.cos(angle) * currentRadius * mirror);
         const y = Math.round(pivotY + Math.sin(angle) * currentRadius);
         if (x >= 0 && x < footprint && y >= 0 && y < footprint) {
-          cells[y + margin][x + margin] = this.createStepCell(step);
-          const x3d = x - pivotX;
-          const z3d = y - pivotY;
-          const supportBlocks = this.createSupportColumnBlocks(x3d, z3d, supportHeight);
-          blocks3d.push(...supportBlocks);
-          supportUnitCount += supportBlocks.length;
-          blocks3d.push(this.createBlock3d(x3d, this.getSlabCenterY(step), z3d));
+          stepsByLevel[step].set(`${x},${y}`, { x, y });
         }
+      }
+
+      for (const position of stepsByLevel[step].values()) {
+        cells[position.y + margin][position.x + margin] = this.createStepCell(step);
+        const x3d = position.x - pivotX;
+        const z3d = position.y - pivotY;
+        const supportBlocks = this.createSupportColumnBlocks(x3d, z3d, supportHeight);
+        blocks3d.push(...supportBlocks);
+        supportUnitCount += supportBlocks.length;
+        blocks3d.push(this.createBlock3d(x3d, this.getSlabCenterY(step), z3d));
       }
 
       const turn = Math.round(ratio * 90);
@@ -1278,7 +1312,7 @@ class MinecraftBuilderStudio {
     const palettes = {
       core: ["#6b7280", "#4b5563", "#9ca3af", "#374151"],
       support: ["#38bdf8", "#0e7490", "#67e8f9", "#155e75"],
-      sphere: ["#4ade80", "#16a34a", "#86efac", "#15803d"],
+      sphere: ["#4ade80c5", "#16a34a93", "#86efadc0", "#15803c48"],
       slab: ["#b7791f", "#92400e", "#d97706", "#78350f"]
     };
     const texture = this.createPixelTexture(palettes[cacheKey] || palettes.slab);
