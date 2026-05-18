@@ -44,6 +44,7 @@ class MinecraftBuilderStudio {
     this.circleInput = document.getElementById("diameter-input");
     this.porchWidthInput = document.getElementById("porch-width-input");
     this.porchHeightInput = document.getElementById("porch-height-input");
+    this.porchThicknessInput = document.getElementById("porch-thickness-input");
     this.porchStyleInput = document.getElementById("porch-style-input");
     this.stairsHeightInput = document.getElementById("stairs-height-input");
     this.stairsWidthInput = document.getElementById("stairs-width-input");
@@ -283,17 +284,13 @@ class MinecraftBuilderStudio {
     return heights;
   }
 
-  generatePorchGrid(width, height, style) {
+  generatePorchGrid(width, height, style, thickness) {
     const marginX = 2;
     const marginY = 2;
     const roofRise = Math.max(2, Math.min(height - 3, Math.round(height * 0.32)));
     const bodyHeight = height - roofRise;
-    const openingWidth = Math.max(3, width - 4);
-    const openingRoofRise = Math.max(1, Math.min(roofRise - 1, Math.round(roofRise * 0.8)));
-    const openingBodyHeight = Math.max(2, bodyHeight - 1);
-    const openingStyle = style === "medieval" ? "pointed" : style;
+    const openingWidth = Math.max(1, width - thickness * 2);
     const outerProfile = this.buildProfile(width, bodyHeight, roofRise, style);
-    const innerProfile = this.buildProfile(openingWidth, openingBodyHeight, openingRoofRise, openingStyle);
     const cols = width + marginX * 2;
     const rows = height + marginY * 2;
     const groundRow = rows - marginY - 1;
@@ -311,7 +308,16 @@ class MinecraftBuilderStudio {
     }
 
     for (let x = 0; x < openingWidth; x += 1) {
-      for (let y = 0; y < innerProfile[x]; y += 1) {
+      const profileX = openingLeft + x;
+      let openingHeight = outerProfile[profileX] - thickness;
+      if (profileX > 0 && outerProfile[profileX - 1] < outerProfile[profileX]) {
+        openingHeight = Math.min(openingHeight, outerProfile[profileX - 1]);
+      }
+      if (profileX < width - 1 && outerProfile[profileX + 1] < outerProfile[profileX]) {
+        openingHeight = Math.min(openingHeight, outerProfile[profileX + 1]);
+      }
+      openingHeight = Math.max(1, openingHeight);
+      for (let y = 0; y < openingHeight; y += 1) {
         const row = groundRow - y;
         const col = openingLeft + x + marginX;
         if (row >= 0 && row < rows) {
@@ -321,7 +327,7 @@ class MinecraftBuilderStudio {
     }
 
     if (style === "medieval") {
-      this.addMedievalDetails(cells, groundRow, marginX, width, bodyHeight);
+      this.addMedievalDetails(cells, groundRow, marginX, width, bodyHeight, thickness);
     }
 
     const blockCount = cells.reduce((total, row) => total + row.filter(Boolean).length, 0);
@@ -717,21 +723,20 @@ class MinecraftBuilderStudio {
     return cells;
   }
 
-  addMedievalDetails(cells, groundRow, marginX, width, bodyHeight) {
+  addMedievalDetails(cells, groundRow, marginX, width, bodyHeight, thickness) {
     const buttressHeight = Math.max(3, Math.round(bodyHeight * 0.65));
     const left = marginX;
     const right = marginX + width - 1;
+    const buttressWidth = Math.max(1, Math.min(thickness, Math.floor(width / 4)));
 
     for (let y = 0; y < buttressHeight; y += 1) {
       const row = groundRow - y;
       if (row < 0 || row >= cells.length) {
         break;
       }
-      cells[row][left] = true;
-      cells[row][right] = true;
-      if (left + 1 < right) {
-        cells[row][left + 1] = true;
-        cells[row][right - 1] = true;
+      for (let offset = 0; offset < buttressWidth; offset += 1) {
+        cells[row][left + offset] = true;
+        cells[row][right - offset] = true;
       }
     }
   }
@@ -762,17 +767,21 @@ class MinecraftBuilderStudio {
   buildPorchResult() {
     const width = this.normalizeOddInteger(this.porchWidthInput.value, 5, 101);
     const height = this.normalizeInteger(this.porchHeightInput.value, 5, 120);
+    const rawThickness = this.normalizeInteger(this.porchThicknessInput.value, 1, 24);
     const style = this.porchStyleInput.value;
     const hasStyle = Object.prototype.hasOwnProperty.call(PORCH_STYLE_LABELS, style);
+    const maxThickness = width ? Math.max(1, Math.min(24, Math.floor((width - 3) / 2), height - 2)) : 1;
+    const thickness = rawThickness ? Math.min(rawThickness, maxThickness) : null;
 
-    if (!width || !height || !hasStyle) {
-      this.showMessage("Paramètres de porche invalides. Vérifie largeur, hauteur et style.");
+    if (!width || !height || !thickness || !hasStyle) {
+      this.showMessage("Paramètres de porche invalides. Vérifie largeur, hauteur, épaisseur et style.");
       return null;
     }
 
     this.porchWidthInput.value = String(width);
     this.porchHeightInput.value = String(height);
-    const porch = this.generatePorchGrid(width, height, style);
+    this.porchThicknessInput.value = String(thickness);
+    const porch = this.generatePorchGrid(width, height, style, thickness);
 
     return {
       cells: porch.cells,
@@ -782,6 +791,7 @@ class MinecraftBuilderStudio {
         ["Outil", "Porche / Entrée monumentale"],
         ["Style du haut", PORCH_STYLE_LABELS[style]],
         ["Largeur × hauteur", `${width} × ${height}`],
+        ["Épaisseur", `${thickness} bloc${thickness > 1 ? "s" : ""}`],
         ["Blocs estimés", `~${porch.blockCount}`],
         ["Grille affichée", `${porch.cols} × ${porch.rows}`]
       ]

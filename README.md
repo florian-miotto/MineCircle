@@ -4,7 +4,7 @@ Petit site web pour aider à construire des structures Minecraft en vue de dessu
 - Sélecteur d'outil (cercle, sphère, porche/entrée monumentale ou escalier)
 - Génération de cercle à partir d'un diamètre (1 à 256 blocs)
 - Génération de sphère par couches à partir d'un diamètre, avec aperçu 3D zoomable
-- Génération de porche/entrée monumentale (largeur, hauteur, style du haut)
+- Génération de porche/entrée monumentale (largeur, hauteur, épaisseur du cadre, style du haut)
 - Styles de sommet pour porche : arrondi, en pointe, médiéval
 - Génération d'escalier tout droit, en colimaçon ou arrondi (hauteur totale, largeur)
 - Sens gauche/droite pour les escaliers arrondis et en colimaçon
