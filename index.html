@@ -59,11 +59,13 @@
               <option value="spiral">En colimaçon</option>
               <option value="curved">Arrondi</option>
             </select>
-            <label for="stairs-turn-input">Sens de l'arrondi</label>
-            <select id="stairs-turn-input" name="stairs-turn">
-              <option value="right">Droite</option>
-              <option value="left">Gauche</option>
-            </select>
+            <div id="stairs-turn-control" class="stair-turn-control hidden">
+              <label id="stairs-turn-label" for="stairs-turn-input">Sens de rotation</label>
+              <select id="stairs-turn-input" name="stairs-turn">
+                <option value="right">Droite</option>
+                <option value="left">Gauche</option>
+              </select>
+            </div>
           </div>
           <div class="input-row input-row-submit">
             <button type="submit">Générer</button>
@@ -73,31 +75,31 @@
         <div id="stats" class="stats" aria-live="polite"></div>
       </aside>
       <section class="panel canvas-panel">
-        <div class="panel-title-row">
-          <h2>Vue de dessus</h2>
-          <div class="panel-actions">
-            <button id="export-button" type="button" class="secondary-button">Exporter PNG</button>
-            <button id="clear-button" type="button" class="ghost-button">Effacer</button>
-          </div>
-        </div>
-        <div class="grid-wrapper">
-          <div id="circle-grid" class="circle-grid" role="img" aria-label="Grille de construction Minecraft"></div>
-        </div>
         <div id="stairs-details" class="stairs-details hidden" aria-live="polite">
           <div class="detail-block detail-block-3d">
-            <h3>Vue 3D</h3>
-            <div id="stairs-3d-view" class="stairs-3d-view" role="img" aria-label="Vue 3D de l'escalier"></div>
+            <h3 id="three-view-title">Vue 3D</h3>
+            <div id="stairs-3d-view" class="stairs-3d-view" role="img" aria-label="Vue 3D de la structure"></div>
             <p id="stairs-3d-status" class="three-status"></p>
           </div>
-          <div class="detail-block">
+        </div>
+        <div id="plan-views" class="plan-views">
+          <div class="plan-view-block">
+            <div class="panel-title-row">
+              <h2>Vue de dessus</h2>
+              <div class="panel-actions">
+                <button id="export-button" type="button" class="secondary-button">Exporter PNG</button>
+                <button id="clear-button" type="button" class="ghost-button">Effacer</button>
+              </div>
+            </div>
+            <div class="grid-wrapper">
+              <div id="circle-grid" class="circle-grid" role="img" aria-label="Grille de construction Minecraft"></div>
+            </div>
+          </div>
+          <div id="side-detail-block" class="detail-block hidden">
             <h3>Vue de côté</h3>
             <div class="grid-wrapper detail-grid-wrapper">
               <div id="side-grid" class="circle-grid side-grid" role="img" aria-label="Vue de côté de l'escalier"></div>
             </div>
-          </div>
-          <div class="detail-block">
-            <h3>Étape par étape</h3>
-            <ol id="build-steps" class="build-steps"></ol>
           </div>
         </div>
         <p class="legend">

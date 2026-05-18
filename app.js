@@ -48,15 +48,19 @@ class MinecraftBuilderStudio {
     this.stairsHeightInput = document.getElementById("stairs-height-input");
     this.stairsWidthInput = document.getElementById("stairs-width-input");
     this.stairsTypeInput = document.getElementById("stairs-type-input");
+    this.stairsTurnControl = document.getElementById("stairs-turn-control");
+    this.stairsTurnLabel = document.getElementById("stairs-turn-label");
     this.stairsTurnInput = document.getElementById("stairs-turn-input");
     this.toolHint = document.getElementById("tool-hint");
     this.toolPanels = Array.from(document.querySelectorAll("[data-tool-target]"));
+    this.canvasPanel = document.querySelector(".canvas-panel");
     this.grid = document.getElementById("circle-grid");
     this.stairsDetails = document.getElementById("stairs-details");
     this.threeContainer = document.getElementById("stairs-3d-view");
+    this.threeViewTitle = document.getElementById("three-view-title");
     this.threeStatus = document.getElementById("stairs-3d-status");
+    this.sideDetailBlock = document.getElementById("side-detail-block");
     this.sideGrid = document.getElementById("side-grid");
-    this.buildSteps = document.getElementById("build-steps");
     this.stats = document.getElementById("stats");
     this.asciiOutput = document.getElementById("ascii-output");
     this.clearButton = document.getElementById("clear-button");
@@ -67,6 +71,7 @@ class MinecraftBuilderStudio {
     this.futureServicesContainer = document.getElementById("future-services");
     this.currentCells = null;
     this.sphereLayers = null;
+    this.sphereStats = null;
     this.currentSphereLayerIndex = 0;
     this.threeState = null;
     this.bindEvents();
@@ -83,6 +88,11 @@ class MinecraftBuilderStudio {
 
     this.toolSelect.addEventListener("change", () => {
       this.syncVisibleControls();
+      this.drawCurrentTool();
+    });
+
+    this.stairsTypeInput.addEventListener("change", () => {
+      this.syncStairTurnControl();
       this.drawCurrentTool();
     });
 
@@ -141,6 +151,15 @@ class MinecraftBuilderStudio {
       panel.classList.toggle("hidden", !isCurrentPanel);
     }
     this.toolHint.textContent = TOOL_HINTS[selectedTool] || "";
+    this.syncStairTurnControl();
+  }
+
+  syncStairTurnControl() {
+    const type = this.stairsTypeInput.value;
+    const usesDirection = type === "spiral" || type === "curved";
+    this.stairsTurnControl.classList.toggle("hidden", !usesDirection);
+    this.stairsTurnInput.disabled = !usesDirection;
+    this.stairsTurnLabel.textContent = type === "curved" ? "Sens de l'arrondi" : "Sens du colimaçon";
   }
 
   generateCircleGrid(diameter) {
@@ -197,6 +216,40 @@ class MinecraftBuilderStudio {
     }
 
     return { layers, cols: size, rows: size, blockCount };
+  }
+
+  generateSphereBlocks3d(layers) {
+    if (!layers || layers.length === 0) {
+      return [];
+    }
+
+    const blocks = [];
+    const rows = layers[0].length;
+    const cols = layers[0][0].length;
+    const centerX = (cols - 1) / 2;
+    const centerZ = (rows - 1) / 2;
+    const centerY = (layers.length - 1) / 2;
+
+    for (let layerIndex = 0; layerIndex < layers.length; layerIndex += 1) {
+      const layer = layers[layerIndex];
+      for (let z = 0; z < rows; z += 1) {
+        for (let x = 0; x < cols; x += 1) {
+          if (layer[z][x]) {
+            blocks.push(this.createBlock3d(
+              x - centerX,
+              layerIndex - centerY,
+              z - centerZ,
+              "sphere",
+              1,
+              1,
+              1
+            ));
+          }
+        }
+      }
+    }
+
+    return blocks;
   }
 
   getArchContribution(style, ratioFromCenter, rise, index) {
@@ -385,11 +438,12 @@ class MinecraftBuilderStudio {
     };
   }
 
-  generateSpiralStairsGrid(height, width) {
+  generateSpiralStairsGrid(height, width, direction = "right") {
     const walkwayWidth = Math.max(1, width);
     const stepCount = this.getStairStepCount(height);
     const innerRadius = 1.35;
     const turnPerStep = Math.PI / 4;
+    const turnSign = direction === "left" ? -1 : 1;
     const gridRadius = Math.ceil(innerRadius + walkwayWidth + 0.85);
     const footprint = gridRadius * 2 + 1;
     const center = Math.floor(footprint / 2);
@@ -404,7 +458,7 @@ class MinecraftBuilderStudio {
     cells[center + margin][center + margin] = this.createCoreCell("P");
 
     for (let step = 1; step <= stepCount; step += 1) {
-      const angle = -Math.PI / 2 + (step - 1) * turnPerStep;
+      const angle = -Math.PI / 2 + (step - 1) * turnPerStep * turnSign;
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
       const sectorStart = angle - turnPerStep * 0.55;
@@ -749,7 +803,7 @@ class MinecraftBuilderStudio {
 
     this.stairsHeightInput.value = String(height);
     const stairs = type === "spiral"
-      ? this.generateSpiralStairsGrid(height, width)
+      ? this.generateSpiralStairsGrid(height, width, curvedDirection)
       : type === "curved"
         ? this.generateCurvedStairsGrid(height, width, curvedDirection)
         : this.generateStraightStairsGrid(height, width, type);
@@ -766,7 +820,9 @@ class MinecraftBuilderStudio {
       ["Grille affichée", `${stairs.cols} × ${stairs.rows}`]
     ];
 
-    if (type === "curved") {
+    if (type === "spiral") {
+      stats.splice(2, 0, ["Sens du colimaçon", CURVED_DIRECTION_LABELS[curvedDirection]]);
+    } else if (type === "curved") {
       stats.splice(2, 0, ["Sens de l'arrondi", CURVED_DIRECTION_LABELS[curvedDirection]]);
     }
 
@@ -795,20 +851,36 @@ class MinecraftBuilderStudio {
     this.sphereLayerSlider.max = String(sphere.layers.length);
     this.sphereLayerSlider.value = String(this.currentSphereLayerIndex + 1);
     this.sphereLayerLabel.textContent = `Couche ${this.currentSphereLayerIndex + 1} / ${sphere.layers.length}`;
+    this.sphereStats = {
+      diameter,
+      layers: sphere.layers.length,
+      blockCount: sphere.blockCount,
+      cols: sphere.cols,
+      rows: sphere.rows
+    };
 
     return {
       cells: sphere.layers[this.currentSphereLayerIndex],
       cols: sphere.cols,
       rows: sphere.rows,
-      stats: [
-        ["Outil", "Sphère"],
-        ["Diamètre", `${diameter} blocs`],
-        ["Couches", `${sphere.layers.length}`],
-        ["Couche actuelle", `${this.currentSphereLayerIndex + 1}`],
-        ["Blocs estimés", `~${sphere.blockCount}`],
-        ["Grille affichée", `${sphere.cols} × ${sphere.rows}`]
-      ]
+      blocks3d: this.generateSphereBlocks3d(sphere.layers),
+      stats: this.getSphereStatsRows()
     };
+  }
+
+  getSphereStatsRows() {
+    if (!this.sphereStats) {
+      return [];
+    }
+
+    return [
+      ["Outil", "Sphère"],
+      ["Diamètre", `${this.sphereStats.diameter} blocs`],
+      ["Couches", `${this.sphereStats.layers}`],
+      ["Couche actuelle", `${this.currentSphereLayerIndex + 1}`],
+      ["Blocs estimés", `~${this.sphereStats.blockCount}`],
+      ["Grille affichée", `${this.sphereStats.cols} × ${this.sphereStats.rows}`]
+    ];
   }
 
   drawCurrentTool() {
@@ -831,7 +903,7 @@ class MinecraftBuilderStudio {
 
     this.currentCells = result.cells;
     this.renderGrid(result.cells, result.cols);
-    this.renderStairsDetails(result);
+    this.renderDetailViews(result);
     this.renderAscii(result.cells);
     this.updateStats(result.stats);
   }
@@ -863,19 +935,38 @@ class MinecraftBuilderStudio {
     target.appendChild(fragment);
   }
 
-  renderStairsDetails(result) {
-    const isStairs = this.toolSelect.value === "stairs" && result.sideCells;
-    this.stairsDetails.classList.toggle("hidden", !isStairs);
-    if (!isStairs) {
+  renderDetailViews(result) {
+    const selectedTool = this.toolSelect.value;
+    const isStairs = selectedTool === "stairs" && result.sideCells;
+    const isSphere = selectedTool === "sphere" && result.blocks3d;
+    const showDetails = isStairs || isSphere;
+
+    this.stairsDetails.classList.toggle("hidden", !showDetails);
+    this.stairsDetails.classList.toggle("sphere-details", isSphere);
+    this.canvasPanel.classList.toggle("stairs-layout", isStairs);
+    this.canvasPanel.classList.toggle("sphere-layout", isSphere);
+    this.sideDetailBlock.classList.toggle("hidden", !isStairs);
+    this.threeViewTitle.textContent = isSphere ? "Vue 3D de la sphère" : "Vue 3D";
+
+    if (!showDetails) {
       this.sideGrid.replaceChildren();
-      this.buildSteps.replaceChildren();
       this.clearThreeView();
       return;
     }
 
-    this.renderThreeStairs(result.blocks3d || []);
+    this.renderThreeBlocks(result.blocks3d || [], {
+      gridAtBottom: isStairs,
+      status: isSphere
+        ? "Glissez pour tourner la sphère. Utilisez la molette pour zoomer."
+        : "Glissez pour tourner. Utilisez la molette pour zoomer."
+    });
+
+    if (!isStairs) {
+      this.sideGrid.replaceChildren();
+      return;
+    }
+
     this.renderCells(this.sideGrid, result.sideCells, result.sideCells[0].length);
-    this.renderBuildSteps(result.buildPlan || []);
   }
 
   renderSphereLayer() {
@@ -887,6 +978,7 @@ class MinecraftBuilderStudio {
     this.renderGrid(layer, layer[0].length);
     this.renderAscii(layer);
     this.updateSphereLayerLabel();
+    this.updateStats(this.getSphereStatsRows());
   }
 
   updateSphereLayerLabel() {
@@ -926,16 +1018,6 @@ class MinecraftBuilderStudio {
       return "";
     }
     return cell.title || cell.label || "";
-  }
-
-  renderBuildSteps(plan) {
-    const fragment = document.createDocumentFragment();
-    for (const item of plan) {
-      const step = document.createElement("li");
-      step.innerHTML = `<strong>${item.label}</strong><span>${item.detail}</span>`;
-      fragment.appendChild(step);
-    }
-    this.buildSteps.replaceChildren(fragment);
   }
 
   initThreeView() {
@@ -1034,7 +1116,7 @@ class MinecraftBuilderStudio {
     }, { passive: false });
   }
 
-  renderThreeStairs(blocks) {
+  renderThreeBlocks(blocks, options = {}) {
     if (!this.initThreeView()) {
       return;
     }
@@ -1045,14 +1127,20 @@ class MinecraftBuilderStudio {
     const centeredBlocks = this.centerBlocksForThreeView(blocks);
 
     const maxY = centeredBlocks.reduce((max, block) => Math.max(max, block.y + block.height / 2), 1);
+    const minY = centeredBlocks.reduce((min, block) => Math.min(min, block.y - block.height / 2), 0);
+    const heightSpan = Math.max(1, maxY - minY);
     const maxRadius = centeredBlocks.reduce((max, block) => {
       const radius = Math.hypot(block.x, block.z) + Math.max(block.width, block.depth);
       return Math.max(max, radius);
     }, 3);
     const showEdges = centeredBlocks.length <= 900;
 
-    for (const block of centeredBlocks) {
-      this.addMinecraftBox(group, block, showEdges);
+    if (centeredBlocks.length > 1200) {
+      this.addInstancedMinecraftBoxes(group, centeredBlocks);
+    } else {
+      for (const block of centeredBlocks) {
+        this.addMinecraftBox(group, block, showEdges);
+      }
     }
 
     if (this.threeState.grid) {
@@ -1060,20 +1148,20 @@ class MinecraftBuilderStudio {
     }
     const gridSize = Math.max(8, maxRadius * 2.6);
     const grid = new THREE.GridHelper(gridSize, Math.ceil(gridSize));
-    grid.position.y = -0.02;
+    grid.position.y = options.gridAtBottom ? -0.02 : minY - 0.02;
     grid.material.color.set(0x334155);
     grid.material.opacity = 0.28;
     grid.material.transparent = true;
     scene.add(grid);
     this.threeState.grid = grid;
 
-    this.threeState.targetY = maxY * 0.45;
+    this.threeState.targetY = (minY + maxY) * 0.5;
     this.threeState.minCameraDistance = Math.max(5, maxRadius * 0.9);
-    this.threeState.maxCameraDistance = Math.max(22, maxRadius * 5, maxY * 2.6);
-    this.threeState.cameraDistance = Math.max(10, maxRadius * 2.35, maxY * 1.25);
+    this.threeState.maxCameraDistance = Math.max(22, maxRadius * 5, heightSpan * 2.6);
+    this.threeState.cameraDistance = Math.max(10, maxRadius * 2.35, heightSpan * 1.25);
     this.positionThreeCamera();
     renderer.render(scene, camera);
-    this.threeStatus.textContent = "Glissez pour tourner. Utilisez la molette pour zoomer.";
+    this.threeStatus.textContent = options.status || "Glissez pour tourner. Utilisez la molette pour zoomer.";
   }
 
   centerBlocksForThreeView(blocks) {
@@ -1118,7 +1206,13 @@ class MinecraftBuilderStudio {
       return;
     }
 
-    const edgeColor = block.kind === "core" ? 0x1f2937 : block.kind === "support" ? 0x083344 : 0x3f2a12;
+    const edgeColor = block.kind === "core"
+      ? 0x1f2937
+      : block.kind === "support"
+        ? 0x083344
+        : block.kind === "sphere"
+          ? 0x14532d
+          : 0x3f2a12;
     const edges = new THREE.LineSegments(
       new THREE.EdgesGeometry(geometry),
       new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: 0.44 })
@@ -1126,6 +1220,42 @@ class MinecraftBuilderStudio {
     edges.position.copy(mesh.position);
     edges.rotation.copy(mesh.rotation);
     group.add(edges);
+  }
+
+  addInstancedMinecraftBoxes(group, blocks) {
+    const THREE = window.THREE;
+    const groupedBlocks = new Map();
+
+    for (const block of blocks) {
+      const key = [
+        block.kind || "slab",
+        block.width,
+        block.height,
+        block.depth
+      ].join("|");
+      if (!groupedBlocks.has(key)) {
+        groupedBlocks.set(key, []);
+      }
+      groupedBlocks.get(key).push(block);
+    }
+
+    const dummy = new THREE.Object3D();
+    for (const blockGroup of groupedBlocks.values()) {
+      const sample = blockGroup[0];
+      const geometry = new THREE.BoxGeometry(sample.width, sample.height, sample.depth);
+      const material = this.getThreeMaterial(sample.kind);
+      const mesh = new THREE.InstancedMesh(geometry, material, blockGroup.length);
+
+      blockGroup.forEach((block, index) => {
+        dummy.position.set(block.x, block.y, block.z);
+        dummy.rotation.set(0, block.rotationY || 0, 0);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(index, dummy.matrix);
+      });
+
+      mesh.instanceMatrix.needsUpdate = true;
+      group.add(mesh);
+    }
   }
 
   getThreeMaterial(kind) {
@@ -1138,6 +1268,7 @@ class MinecraftBuilderStudio {
     const palettes = {
       core: ["#6b7280", "#4b5563", "#9ca3af", "#374151"],
       support: ["#38bdf8", "#0e7490", "#67e8f9", "#155e75"],
+      sphere: ["#4ade80", "#16a34a", "#86efac", "#15803d"],
       slab: ["#b7791f", "#92400e", "#d97706", "#78350f"]
     };
     const texture = this.createPixelTexture(palettes[cacheKey] || palettes.slab);
@@ -1236,22 +1367,25 @@ class MinecraftBuilderStudio {
     this.stats.innerHTML = `<div>${message}</div>`;
     this.grid.replaceChildren();
     this.sideGrid.replaceChildren();
-    this.buildSteps.replaceChildren();
     this.stairsDetails.classList.add("hidden");
+    this.canvasPanel.classList.remove("stairs-layout", "sphere-layout");
     this.clearThreeView();
     this.asciiOutput.textContent = "";
+    this.sphereLayers = null;
+    this.sphereStats = null;
   }
 
   clearPreview() {
     this.grid.replaceChildren();
     this.sideGrid.replaceChildren();
-    this.buildSteps.replaceChildren();
     this.stairsDetails.classList.add("hidden");
+    this.canvasPanel.classList.remove("stairs-layout", "sphere-layout");
     this.clearThreeView();
     this.asciiOutput.textContent = "";
     this.stats.innerHTML = "<div>Aucune structure affichée.</div>";
     this.currentCells = null;
     this.sphereLayers = null;
+    this.sphereStats = null;
     this.currentSphereLayerIndex = 0;
   }
 
