@@ -359,9 +359,9 @@ button:hover {
 
 .cell.support {
   background:
-    linear-gradient(180deg, rgba(125, 211, 252, 0.62) 0%, rgba(8, 145, 178, 0.5) 100%),
+    linear-gradient(180deg, rgba(125, 212, 252, 0.452) 0%, rgba(8, 145, 178, 0.5) 50%),
     repeating-linear-gradient(90deg, rgba(224, 242, 254, 0.24) 0 2px, transparent 2px 7px);
-  color: #dff9ff;
+  color: #dff9ffc0;
 }
 
 .cell.empty {

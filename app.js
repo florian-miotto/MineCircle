@@ -1555,7 +1555,9 @@ class MinecraftBuilderStudio {
     if (selectedTool === "structures") {
       this.currentCells = null;
       this.grid.replaceChildren();
-      this.asciiOutput.textContent = "";
+      if (this.asciiOutput) {
+        this.asciiOutput.textContent = "";
+      }
       this.renderDetailViews(result);
       this.updateStats(result.stats);
       return;
@@ -1660,6 +1662,8 @@ class MinecraftBuilderStudio {
   }
 
   renderAscii(cells) {
+    if (!this.asciiOutput) return;
+
     const lines = cells.map((row) => row.map((cell) => {
       const label = this.getCellLabel(cell);
       if (label) {
@@ -2479,7 +2483,9 @@ class MinecraftBuilderStudio {
     this.stairsDetails.classList.add("hidden");
     this.canvasPanel.classList.remove("stairs-layout", "sphere-layout", "structure-layout");
     this.clearThreeView();
-    this.asciiOutput.textContent = "";
+    if (this.asciiOutput) {
+      this.asciiOutput.textContent = "";
+    }
     this.sphereLayers = null;
     this.sphereStats = null;
   }
@@ -2490,7 +2496,9 @@ class MinecraftBuilderStudio {
     this.stairsDetails.classList.add("hidden");
     this.canvasPanel.classList.remove("stairs-layout", "sphere-layout", "structure-layout");
     this.clearThreeView();
-    this.asciiOutput.textContent = "";
+    if (this.asciiOutput) {
+      this.asciiOutput.textContent = "";
+    }
     this.stats.innerHTML = "<div>Aucune structure affichée.</div>";
     this.currentCells = null;
     this.sphereLayers = null;
