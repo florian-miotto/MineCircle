@@ -21,6 +21,7 @@
             <option value="sphere">Sphère</option>
             <option value="porch">Porche / Entrée monumentale</option>
             <option value="stairs">Escalier</option>
+            <option value="structures">Structures</option>
           </select>
         </div>
         <div class="tool-settings-section">
@@ -68,6 +69,11 @@
                 <option value="left">Gauche</option>
               </select>
             </div>
+          </div>
+          <div class="tool-controls hidden" data-tool-target="structures">
+            <label>Structures disponibles</label>
+            <div id="structure-list" class="structure-list" aria-label="Liste des structures disponibles"></div>
+            <p class="hint">Les structures affichées correspondent aux fichiers GLB présents dans le dossier du site.</p>
           </div>
           <div class="input-row input-row-submit">
             <button type="submit">Générer</button>

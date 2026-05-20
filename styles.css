@@ -140,6 +140,7 @@ label {
 }
 
 input[type="number"],
+input[type="text"],
 select {
   width: 100%;
   background: var(--bg-soft);
@@ -151,6 +152,28 @@ select {
 
 select {
   appearance: none;
+}
+
+.structure-list {
+  display: grid;
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+}
+
+.structure-card[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.structure-card-title {
+  font-size: 0.94rem;
+  font-weight: 700;
+}
+
+.structure-card-description {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
 }
 
 button {
@@ -165,6 +188,27 @@ button {
 
 button:hover {
   background: var(--accent-hover);
+}
+
+.structure-card,
+.structure-card:hover {
+  color: var(--text);
+}
+
+.structure-card {
+  width: 100%;
+  display: grid;
+  gap: 0.22rem;
+  padding: 0.75rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.72);
+  text-align: left;
+}
+
+.structure-card:hover {
+  background: rgba(30, 64, 45, 0.78);
+  border-color: rgba(34, 197, 94, 0.62);
 }
 
 .input-row-submit {
@@ -351,6 +395,17 @@ button:hover {
 .canvas-panel.stairs-layout .plan-views {
   grid-template-columns: minmax(0, 1fr) minmax(220px, 0.58fr);
   align-items: start;
+}
+
+.canvas-panel.structure-layout .plan-views,
+.canvas-panel.structure-layout .legend,
+.canvas-panel.structure-layout .ascii-output,
+.canvas-panel.structure-layout .export-status {
+  display: none;
+}
+
+.canvas-panel.structure-layout .stairs-3d-view {
+  height: clamp(420px, 68vh, 760px);
 }
 
 .stairs-3d-view {

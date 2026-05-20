@@ -25,6 +25,16 @@ const STAIR_TYPE_LABELS = Object.freeze({
   curved: "Arrondi"
 });
 
+const DEFAULT_STRUCTURE_CATALOG = Object.freeze([
+  {
+    id: "mine",
+    title: "Mine",
+    description: "Structure importée depuis le fichier mine.glb du projet.",
+    fileName: "mine.glb",
+    modelUrl: "./mine.glb"
+  }
+]);
+
 const CURVED_DIRECTION_LABELS = Object.freeze({
   right: "Droite",
   left: "Gauche"
@@ -34,7 +44,8 @@ const TOOL_HINTS = Object.freeze({
   circle: "Astuce : le diamètre contrôle le contour extérieur de la forme.",
   sphere: "Astuce : utilisez le curseur pour parcourir les couches horizontales de la sphère.",
   porch: "Astuce : la largeur du porche est ajustée automatiquement à une valeur impaire pour garder une symétrie propre.",
-  stairs: "Astuce : les escaliers utilisent deux dalles par bloc de hauteur."
+  stairs: "Astuce : les escaliers utilisent deux dalles par bloc de hauteur.",
+  structures: "Astuce : choisissez une structure pour afficher son titre, sa description et sa vue 3D."
 });
 
 class MinecraftBuilderStudio {
@@ -46,6 +57,7 @@ class MinecraftBuilderStudio {
     this.porchHeightInput = document.getElementById("porch-height-input");
     this.porchThicknessInput = document.getElementById("porch-thickness-input");
     this.porchStyleInput = document.getElementById("porch-style-input");
+    this.structureList = document.getElementById("structure-list");
     this.stairsHeightInput = document.getElementById("stairs-height-input");
     this.stairsWidthInput = document.getElementById("stairs-width-input");
     this.stairsTypeInput = document.getElementById("stairs-type-input");
@@ -74,8 +86,12 @@ class MinecraftBuilderStudio {
     this.sphereLayers = null;
     this.sphereStats = null;
     this.currentSphereLayerIndex = 0;
+    this.structureCatalog = [...DEFAULT_STRUCTURE_CATALOG];
+    this.selectedStructureId = this.structureCatalog[0].id;
     this.threeState = null;
     this.bindEvents();
+    this.renderStructureCatalog();
+    this.loadStructureCatalog();
     this.renderFutureServices();
     this.syncVisibleControls();
     this.drawCurrentTool();
@@ -95,6 +111,18 @@ class MinecraftBuilderStudio {
     this.stairsTypeInput.addEventListener("change", () => {
       this.syncStairTurnControl();
       this.drawCurrentTool();
+    });
+
+    this.structureList.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-structure-id]");
+      if (!button) {
+        return;
+      }
+      this.selectedStructureId = button.dataset.structureId;
+      this.renderStructureCatalog();
+      if (this.toolSelect.value === "structures") {
+        this.drawCurrentTool();
+      }
     });
 
     this.clearButton.addEventListener("click", () => {
@@ -161,6 +189,64 @@ class MinecraftBuilderStudio {
     this.stairsTurnControl.classList.toggle("hidden", !usesDirection);
     this.stairsTurnInput.disabled = !usesDirection;
     this.stairsTurnLabel.textContent = type === "curved" ? "Sens de l'arrondi" : "Sens du colimaçon";
+  }
+
+  renderStructureCatalog() {
+    const fragment = document.createDocumentFragment();
+
+    for (const structure of this.structureCatalog) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "structure-card";
+      button.dataset.structureId = structure.id;
+      button.setAttribute("aria-pressed", String(structure.id === this.selectedStructureId));
+
+      const title = document.createElement("span");
+      title.className = "structure-card-title";
+      title.textContent = structure.title;
+
+      const description = document.createElement("span");
+      description.className = "structure-card-description";
+      description.textContent = structure.description;
+
+      button.append(title, description);
+      fragment.appendChild(button);
+    }
+
+    this.structureList.replaceChildren(fragment);
+  }
+
+  async loadStructureCatalog() {
+    try {
+      const response = await fetch("./structures.json", { cache: "no-store" });
+      if (!response.ok) {
+        return;
+      }
+      const structures = await response.json();
+      if (!Array.isArray(structures) || structures.length === 0) {
+        return;
+      }
+
+      this.structureCatalog = structures
+        .filter((structure) => structure && structure.modelUrl)
+        .map((structure) => ({
+          id: structure.id || structure.fileName || structure.modelUrl,
+          title: structure.title || structure.fileName || "Structure",
+          description: structure.description || "Structure GLB du dossier du site.",
+          fileName: structure.fileName || structure.modelUrl.replace(/^\.\//, ""),
+          modelUrl: structure.modelUrl
+        }));
+
+      if (!this.structureCatalog.some((structure) => structure.id === this.selectedStructureId)) {
+        this.selectedStructureId = this.structureCatalog[0].id;
+      }
+      this.renderStructureCatalog();
+      if (this.toolSelect.value === "structures") {
+        this.drawCurrentTool();
+      }
+    } catch (error) {
+      console.info("Catalogue GLB automatique indisponible, fallback local utilisé.", error);
+    }
   }
 
   generateCircleGrid(diameter) {
@@ -927,6 +1013,25 @@ class MinecraftBuilderStudio {
     ];
   }
 
+  buildStructuresResult() {
+    const selectedStructure = this.structureCatalog.find((structure) => structure.id === this.selectedStructureId)
+      || this.structureCatalog[0]
+      || DEFAULT_STRUCTURE_CATALOG[0];
+
+    return {
+      title: selectedStructure.title,
+      description: selectedStructure.description,
+      modelUrl: selectedStructure.modelUrl,
+      stats: [
+        ["Outil", "Structures"],
+        ["Titre", selectedStructure.title],
+        ["Description", selectedStructure.description],
+        ["Fichier", selectedStructure.fileName],
+        ["Moteur", "Three.js"]
+      ]
+    };
+  }
+
   drawCurrentTool() {
     const selectedTool = this.toolSelect.value;
     let result;
@@ -935,6 +1040,8 @@ class MinecraftBuilderStudio {
       result = this.buildPorchResult();
     } else if (selectedTool === "sphere") {
       result = this.buildSphereResult();
+    } else if (selectedTool === "structures") {
+      result = this.buildStructuresResult();
     } else if (selectedTool === "stairs") {
       result = this.buildStairsResult();
     } else {
@@ -942,6 +1049,15 @@ class MinecraftBuilderStudio {
     }
 
     if (!result) {
+      return;
+    }
+
+    if (selectedTool === "structures") {
+      this.currentCells = null;
+      this.grid.replaceChildren();
+      this.asciiOutput.textContent = "";
+      this.renderDetailViews(result);
+      this.updateStats(result.stats);
       return;
     }
 
@@ -983,18 +1099,30 @@ class MinecraftBuilderStudio {
     const selectedTool = this.toolSelect.value;
     const isStairs = selectedTool === "stairs" && result.sideCells;
     const isSphere = selectedTool === "sphere" && result.blocks3d;
-    const showDetails = isStairs || isSphere;
+    const isStructure = selectedTool === "structures" && result.modelUrl;
+    const showDetails = isStairs || isSphere || isStructure;
 
     this.stairsDetails.classList.toggle("hidden", !showDetails);
     this.stairsDetails.classList.toggle("sphere-details", isSphere);
     this.canvasPanel.classList.toggle("stairs-layout", isStairs);
     this.canvasPanel.classList.toggle("sphere-layout", isSphere);
+    this.canvasPanel.classList.toggle("structure-layout", isStructure);
     this.sideDetailBlock.classList.toggle("hidden", !isStairs);
-    this.threeViewTitle.textContent = isSphere ? "Vue 3D de la sphère" : "Vue 3D";
+    this.threeViewTitle.textContent = isStructure
+      ? "Vue 3D de la structure"
+      : isSphere
+        ? "Vue 3D de la sphère"
+        : "Vue 3D";
 
     if (!showDetails) {
       this.sideGrid.replaceChildren();
       this.clearThreeView();
+      return;
+    }
+
+    if (isStructure) {
+      this.renderStructureModel(result);
+      this.sideGrid.replaceChildren();
       return;
     }
 
@@ -1167,6 +1295,7 @@ class MinecraftBuilderStudio {
 
     const THREE = window.THREE;
     const { scene, camera, renderer, group } = this.threeState;
+    this.threeState.structureLoadToken = null;
     group.clear();
     const centeredBlocks = this.centerBlocksForThreeView(blocks);
 
@@ -1206,6 +1335,312 @@ class MinecraftBuilderStudio {
     this.positionThreeCamera();
     renderer.render(scene, camera);
     this.threeStatus.textContent = options.status || "Glissez pour tourner. Utilisez la molette pour zoomer.";
+  }
+
+  async renderStructureModel(structure) {
+    if (!this.initThreeView()) {
+      return;
+    }
+
+    const THREE = window.THREE;
+    const { scene, camera, renderer, group } = this.threeState;
+    const loadToken = Symbol("structure-load");
+    this.threeState.structureLoadToken = loadToken;
+    group.clear();
+    group.rotation.set(0, 0, 0);
+    if (this.threeState.grid) {
+      scene.remove(this.threeState.grid);
+      this.threeState.grid = null;
+    }
+
+    const label = structure.title || structure.modelUrl;
+    this.threeStatus.textContent = `Chargement de ${label}...`;
+
+    try {
+      const model = await this.loadGlbModel(structure.modelUrl);
+      if (this.threeState.structureLoadToken !== loadToken) {
+        return;
+      }
+
+      group.add(model);
+      const bounds = new THREE.Box3().setFromObject(model);
+      if (bounds.isEmpty()) {
+        this.threeStatus.textContent = "Le fichier GLB est chargé, mais aucun volume visible n'a été trouvé.";
+        return;
+      }
+
+      const center = new THREE.Vector3();
+      const size = new THREE.Vector3();
+      bounds.getCenter(center);
+      bounds.getSize(size);
+      model.position.sub(center);
+
+      const centeredBounds = new THREE.Box3().setFromObject(model);
+      const minY = centeredBounds.min.y;
+      const maxY = centeredBounds.max.y;
+      const maxRadius = Math.max(size.x, size.z, 1) * 0.75;
+      const heightSpan = Math.max(1, maxY - minY);
+      const gridSize = Math.max(8, Math.max(size.x, size.z) * 1.35);
+      const grid = new THREE.GridHelper(gridSize, Math.max(8, Math.ceil(gridSize)));
+      grid.position.y = minY - 0.02;
+      grid.material.color.set(0x334155);
+      grid.material.opacity = 0.28;
+      grid.material.transparent = true;
+      scene.add(grid);
+      this.threeState.grid = grid;
+
+      this.threeState.targetY = (minY + maxY) * 0.5;
+      this.threeState.minCameraDistance = Math.max(3, maxRadius * 0.5);
+      this.threeState.maxCameraDistance = Math.max(30, maxRadius * 8, heightSpan * 5);
+      this.threeState.cameraDistance = Math.max(8, maxRadius * 2.4, heightSpan * 1.4);
+      this.positionThreeCamera();
+      renderer.render(scene, camera);
+      this.threeStatus.textContent = `${structure.title} chargé depuis ${structure.modelUrl}. Glissez pour tourner. Utilisez la molette pour zoomer.`;
+    } catch (error) {
+      console.error(error);
+      const detail = error && error.message ? error.message : "erreur inconnue";
+      this.threeStatus.textContent = window.location.protocol === "file:"
+        ? "Impossible de charger le GLB en file://. Lancez node dev-server.cjs puis ouvrez http://127.0.0.1:8000/index.html."
+        : `Impossible de charger le GLB : ${detail}`;
+    }
+  }
+
+  async loadGlbModel(modelUrl) {
+    const response = await fetch(modelUrl);
+    if (!response.ok) {
+      throw new Error(`GLB introuvable: ${response.status}`);
+    }
+
+    const buffer = await response.arrayBuffer();
+    return this.parseGlbModel(buffer);
+  }
+
+  parseGlbModel(buffer) {
+    const THREE = window.THREE;
+    const view = new DataView(buffer);
+    const magic = view.getUint32(0, true);
+    const version = view.getUint32(4, true);
+    if (magic !== 0x46546c67 || version !== 2) {
+      throw new Error("Format GLB non supporté.");
+    }
+
+    let offset = 12;
+    let json = null;
+    let binaryChunk = null;
+    while (offset < buffer.byteLength) {
+      const chunkLength = view.getUint32(offset, true);
+      const chunkType = view.getUint32(offset + 4, true);
+      const chunkStart = offset + 8;
+      const chunkEnd = chunkStart + chunkLength;
+      if (chunkType === 0x4e4f534a) {
+        json = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, chunkStart, chunkLength)));
+      } else if (chunkType === 0x004e4942) {
+        binaryChunk = new Uint8Array(buffer, chunkStart, chunkLength);
+      }
+      offset = chunkEnd;
+    }
+
+    if (!json || !binaryChunk) {
+      throw new Error("GLB incomplet.");
+    }
+
+    const textures = this.createGlbTextures(json, binaryChunk);
+    const materials = (json.materials || []).map((material) => this.createGlbMaterial(material, textures));
+    const meshes = (json.meshes || []).map((mesh) => this.createGlbMesh(mesh, json, binaryChunk, materials));
+    const nodes = (json.nodes || []).map((node) => {
+      const group = new THREE.Group();
+      group.name = node.name || "";
+      if (typeof node.mesh === "number" && meshes[node.mesh]) {
+        group.add(meshes[node.mesh].clone());
+      }
+      this.applyGlbNodeTransform(group, node);
+      return group;
+    });
+
+    (json.nodes || []).forEach((node, index) => {
+      if (!node.children) {
+        return;
+      }
+      for (const childIndex of node.children) {
+        if (nodes[childIndex]) {
+          nodes[index].add(nodes[childIndex]);
+        }
+      }
+    });
+
+    const root = new THREE.Group();
+    const scene = json.scenes?.[json.scene || 0] || json.scenes?.[0];
+    const rootNodeIndices = scene?.nodes || nodes.map((_, index) => index);
+    for (const nodeIndex of rootNodeIndices) {
+      if (nodes[nodeIndex]) {
+        root.add(nodes[nodeIndex]);
+      }
+    }
+
+    return root;
+  }
+
+  createGlbMesh(mesh, json, binaryChunk, materials) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    group.name = mesh.name || "";
+
+    for (const primitive of mesh.primitives || []) {
+      if ((primitive.mode ?? 4) !== 4) {
+        continue;
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      for (const [attributeName, accessorIndex] of Object.entries(primitive.attributes || {})) {
+        const attribute = this.getGlbAccessorAttribute(json, binaryChunk, accessorIndex);
+        const threeName = this.getThreeAttributeName(attributeName);
+        if (threeName) {
+          geometry.setAttribute(threeName, attribute);
+        }
+      }
+
+      if (typeof primitive.indices === "number") {
+        geometry.setIndex(this.getGlbAccessorAttribute(json, binaryChunk, primitive.indices));
+      }
+      if (!geometry.getAttribute("normal")) {
+        geometry.computeVertexNormals();
+      }
+
+      const material = materials[primitive.material] || new THREE.MeshStandardMaterial({ color: 0x8b7355, roughness: 0.9 });
+      group.add(new THREE.Mesh(geometry, material));
+    }
+
+    return group;
+  }
+
+  getThreeAttributeName(attributeName) {
+    const names = {
+      POSITION: "position",
+      NORMAL: "normal",
+      TEXCOORD_0: "uv",
+      COLOR_0: "color"
+    };
+    return names[attributeName] || "";
+  }
+
+  getGlbAccessorAttribute(json, binaryChunk, accessorIndex) {
+    const THREE = window.THREE;
+    const accessor = json.accessors[accessorIndex];
+    const array = this.readGlbAccessorArray(json, binaryChunk, accessorIndex);
+    return new THREE.BufferAttribute(array, this.getGlbAccessorItemSize(accessor.type), Boolean(accessor.normalized));
+  }
+
+  readGlbAccessorArray(json, binaryChunk, accessorIndex) {
+    const accessor = json.accessors[accessorIndex];
+    const bufferView = json.bufferViews[accessor.bufferView];
+    const TypedArray = this.getGlbComponentArray(accessor.componentType);
+    const itemSize = this.getGlbAccessorItemSize(accessor.type);
+    const componentSize = TypedArray.BYTES_PER_ELEMENT;
+    const count = accessor.count * itemSize;
+    const accessorOffset = (bufferView.byteOffset || 0) + (accessor.byteOffset || 0);
+    const stride = bufferView.byteStride || itemSize * componentSize;
+
+    if (stride === itemSize * componentSize) {
+      return new TypedArray(binaryChunk.buffer, binaryChunk.byteOffset + accessorOffset, count);
+    }
+
+    const result = new TypedArray(count);
+    const dataView = new DataView(binaryChunk.buffer, binaryChunk.byteOffset + accessorOffset, bufferView.byteLength - (accessor.byteOffset || 0));
+    for (let index = 0; index < accessor.count; index += 1) {
+      for (let item = 0; item < itemSize; item += 1) {
+        result[index * itemSize + item] = this.readGlbComponent(dataView, index * stride + item * componentSize, accessor.componentType);
+      }
+    }
+    return result;
+  }
+
+  getGlbAccessorItemSize(type) {
+    const sizes = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 };
+    return sizes[type] || 1;
+  }
+
+  getGlbComponentArray(componentType) {
+    const arrays = {
+      5120: Int8Array,
+      5121: Uint8Array,
+      5122: Int16Array,
+      5123: Uint16Array,
+      5125: Uint32Array,
+      5126: Float32Array
+    };
+    return arrays[componentType] || Float32Array;
+  }
+
+  readGlbComponent(dataView, offset, componentType) {
+    const readers = {
+      5120: () => dataView.getInt8(offset),
+      5121: () => dataView.getUint8(offset),
+      5122: () => dataView.getInt16(offset, true),
+      5123: () => dataView.getUint16(offset, true),
+      5125: () => dataView.getUint32(offset, true),
+      5126: () => dataView.getFloat32(offset, true)
+    };
+    return readers[componentType]();
+  }
+
+  createGlbTextures(json, binaryChunk) {
+    const THREE = window.THREE;
+    const loader = new THREE.TextureLoader();
+    return (json.textures || []).map((texture) => {
+      const image = json.images?.[texture.source];
+      if (!image || typeof image.bufferView !== "number") {
+        return null;
+      }
+
+      const bufferView = json.bufferViews[image.bufferView];
+      const start = bufferView.byteOffset || 0;
+      const end = start + bufferView.byteLength;
+      const blob = new Blob([binaryChunk.slice(start, end)], { type: image.mimeType || "image/png" });
+      const url = URL.createObjectURL(blob);
+      const threeTexture = loader.load(url, () => URL.revokeObjectURL(url));
+      threeTexture.flipY = false;
+      if ("colorSpace" in threeTexture) {
+        threeTexture.colorSpace = THREE.SRGBColorSpace;
+      }
+      return threeTexture;
+    });
+  }
+
+  createGlbMaterial(material, textures) {
+    const THREE = window.THREE;
+    const pbr = material.pbrMetallicRoughness || {};
+    const baseColor = pbr.baseColorFactor || [1, 1, 1, 1];
+    const meshMaterial = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(baseColor[0], baseColor[1], baseColor[2]),
+      opacity: baseColor[3] ?? 1,
+      transparent: (baseColor[3] ?? 1) < 1 || material.alphaMode === "BLEND",
+      roughness: pbr.roughnessFactor ?? 0.9,
+      metalness: pbr.metallicFactor ?? 0
+    });
+
+    const textureIndex = pbr.baseColorTexture?.index;
+    if (typeof textureIndex === "number" && textures[textureIndex]) {
+      meshMaterial.map = textures[textureIndex];
+    }
+
+    return meshMaterial;
+  }
+
+  applyGlbNodeTransform(object, node) {
+    if (node.matrix) {
+      object.matrix.fromArray(node.matrix);
+      object.matrix.decompose(object.position, object.quaternion, object.scale);
+      return;
+    }
+    if (node.translation) {
+      object.position.fromArray(node.translation);
+    }
+    if (node.rotation) {
+      object.quaternion.fromArray(node.rotation);
+    }
+    if (node.scale) {
+      object.scale.fromArray(node.scale);
+    }
   }
 
   centerBlocksForThreeView(blocks) {
@@ -1259,7 +1694,7 @@ class MinecraftBuilderStudio {
           : 0x3f2a12;
     const edges = new THREE.LineSegments(
       new THREE.EdgesGeometry(geometry),
-      new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: 0.44 })
+      new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: 0.30 })
     );
     edges.position.copy(mesh.position);
     edges.rotation.copy(mesh.rotation);
@@ -1313,16 +1748,27 @@ class MinecraftBuilderStudio {
       core: ["#6b7280", "#4b5563", "#9ca3af", "#374151"],
       support: ["#38bdf8", "#0e7490", "#67e8f9", "#155e75"],
       sphere: ["#4ade80c5", "#16a34a93", "#86efadc0", "#15803c48"],
+      wall: ["#b08968", "#8b5e34", "#d4a373", "#7f5539"],
+      roof: ["#9f1239", "#7f1d1d", "#dc2626", "#581c1c"],
+      door: ["#78350f", "#92400e", "#451a03", "#b45309"],
+      glass: ["#93c5fd", "#60a5fa", "#bfdbfe", "#38bdf8"],
+      metal: ["#64748b", "#475569", "#94a3b8", "#334155"],
+      smoke: ["#374151", "#111827", "#6b7280", "#1f2937"],
+      soil: ["#854d0e", "#713f12", "#a16207", "#422006"],
+      water: ["#0284c7", "#0369a1", "#38bdf8", "#075985"],
+      crop: ["#65a30d", "#4d7c0f", "#84cc16", "#365314"],
+      fence: ["#a16207", "#854d0e", "#ca8a04", "#713f12"],
       slab: ["#b7791f", "#92400e", "#d97706", "#78350f"]
     };
     const texture = this.createPixelTexture(palettes[cacheKey] || palettes.slab);
+    const isTranslucent = cacheKey === "support" || cacheKey === "glass" || cacheKey === "water";
     const material = new THREE.MeshStandardMaterial({
       map: texture,
       roughness: 0.92,
       metalness: 0,
-      transparent: cacheKey === "support",
-      opacity: cacheKey === "support" ? 0.3 : 1,
-      depthWrite: cacheKey !== "support"
+      transparent: isTranslucent,
+      opacity: cacheKey === "support" ? 0.3 : cacheKey === "glass" || cacheKey === "water" ? 0.72 : 1,
+      depthWrite: !isTranslucent
     });
     this.threeState.materials.set(cacheKey, material);
     return material;
@@ -1394,6 +1840,7 @@ class MinecraftBuilderStudio {
     if (!this.threeState) {
       return;
     }
+    this.threeState.structureLoadToken = null;
     this.threeState.group.clear();
     if (this.threeState.grid) {
       this.threeState.scene.remove(this.threeState.grid);
@@ -1412,7 +1859,7 @@ class MinecraftBuilderStudio {
     this.grid.replaceChildren();
     this.sideGrid.replaceChildren();
     this.stairsDetails.classList.add("hidden");
-    this.canvasPanel.classList.remove("stairs-layout", "sphere-layout");
+    this.canvasPanel.classList.remove("stairs-layout", "sphere-layout", "structure-layout");
     this.clearThreeView();
     this.asciiOutput.textContent = "";
     this.sphereLayers = null;
@@ -1423,7 +1870,7 @@ class MinecraftBuilderStudio {
     this.grid.replaceChildren();
     this.sideGrid.replaceChildren();
     this.stairsDetails.classList.add("hidden");
-    this.canvasPanel.classList.remove("stairs-layout", "sphere-layout");
+    this.canvasPanel.classList.remove("stairs-layout", "sphere-layout", "structure-layout");
     this.clearThreeView();
     this.asciiOutput.textContent = "";
     this.stats.innerHTML = "<div>Aucune structure affichée.</div>";
