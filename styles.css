@@ -331,11 +331,25 @@ button:hover {
   background: linear-gradient(180deg, #4ade80 0%, #15803d 100%);
 }
 
+.cell.stair {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.24) 0 34%, transparent 34%),
+    linear-gradient(180deg, #f3b65d 0 50%, #9a5b16 50% 100%);
+  color: #1f1305;
+}
+
 .cell.slab {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0 48%, transparent 48%),
-    linear-gradient(180deg, #d97706 0%, #92400e 100%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0 50%, transparent 50%),
+    linear-gradient(180deg, #e7ad55 0%, #8f5518 100%);
   color: #1f1305;
+}
+
+.cell.platform {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0 18%, transparent 18%),
+    linear-gradient(180deg, #c18a45 0%, #704214 100%);
+  color: #fef3c7;
 }
 
 .cell.core {
@@ -345,8 +359,8 @@ button:hover {
 
 .cell.support {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0 48%, transparent 48%),
-    linear-gradient(180deg, rgba(56, 191, 248, 0.493) 0%, rgba(14, 116, 144, 0.5) 100%);
+    linear-gradient(180deg, rgba(125, 211, 252, 0.62) 0%, rgba(8, 145, 178, 0.5) 100%),
+    repeating-linear-gradient(90deg, rgba(224, 242, 254, 0.24) 0 2px, transparent 2px 7px);
   color: #dff9ff;
 }
 
@@ -468,8 +482,16 @@ button:hover {
   background: #22c55e;
 }
 
+.swatch-stair {
+  background: #d59a3a;
+}
+
 .swatch-slab {
-  background: #d97706;
+  background: #c58a2b;
+}
+
+.swatch-platform {
+  background: #9f6b2f;
 }
 
 .swatch-core {

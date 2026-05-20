@@ -8,8 +8,9 @@ Petit site web pour aider à construire des structures Minecraft en vue de dessu
 - Styles de sommet pour porche : arrondi, en pointe, médiéval
 - Génération d'escalier tout droit, en colimaçon ou arrondi (hauteur totale, largeur)
 - Sens gauche/droite pour les escaliers arrondis et en colimaçon
-- Escaliers basés sur des dalles Minecraft : 2 dalles = 1 bloc de hauteur
-- Supports de sécurité en bordure des dalles, visibles en bleu, pour garder un passage sous l'escalier
+- Escaliers droits basés sur des blocs escaliers Minecraft pour monter sans sauter
+- Escaliers arrondis et en colimaçon avec blocs escaliers orientés par quarts de tour, dalles de palier et blocs de transition
+- Supports de sécurité en blocs pleins, visibles en bleu, principalement placés en bordure pour garder un passage sous l'escalier
 - Vue de dessus, vue de côté et aperçu 3D zoomable pour les escaliers
 - Catalogue de structures basé sur les fichiers `.glb` du dossier, avec titre, descriptif et aperçu 3D zoomable
 - Affichage visuel + aperçu texte

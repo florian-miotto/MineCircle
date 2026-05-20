@@ -44,7 +44,7 @@ const TOOL_HINTS = Object.freeze({
   circle: "Astuce : le diamètre contrôle le contour extérieur de la forme.",
   sphere: "Astuce : utilisez le curseur pour parcourir les couches horizontales de la sphère.",
   porch: "Astuce : la largeur du porche est ajustée automatiquement à une valeur impaire pour garder une symétrie propre.",
-  stairs: "Astuce : les escaliers utilisent deux dalles par bloc de hauteur.",
+  stairs: "Astuce : les marches utilisent des blocs escaliers Minecraft et des supports en blocs pleins.",
   structures: "Astuce : choisissez une structure pour afficher son titre, sa description et sa vue 3D."
 });
 
@@ -423,9 +423,27 @@ class MinecraftBuilderStudio {
   createStepCell(level) {
     return {
       block: true,
-      kind: "slab",
+      kind: "stair",
       label: String(level),
-      title: `Dalle ${level}`
+      title: `Bloc escalier ${level}`
+    };
+  }
+
+  createSlabCell(level) {
+    return {
+      block: true,
+      kind: "slab",
+      label: "",
+      title: `Dalle de palier ${level}`
+    };
+  }
+
+  createPlatformCell(level) {
+    return {
+      block: true,
+      kind: "platform",
+      label: "",
+      title: `Bloc de transition ${level}`
     };
   }
 
@@ -447,38 +465,158 @@ class MinecraftBuilderStudio {
     };
   }
 
-  createBlock3d(x, y, z, kind = "slab", width = 1, height = 0.5, depth = 1, rotationY = 0) {
+  createBlock3d(x, y, z, kind = "block", width = 1, height = 1, depth = 1, rotationY = 0) {
     return { x, y, z, kind, width, height, depth, rotationY };
   }
 
+  createStairBlock3d(x, step, z, rotationY = 0) {
+    const block = this.createBlock3d(
+      x,
+      this.getStairCenterY(step),
+      z,
+      "stair",
+      1,
+      1,
+      1,
+      this.quantizeRotation90(rotationY)
+    );
+    block.step = step;
+    return block;
+  }
+
+  createSlabBlock3d(x, step, z) {
+    const block = this.createBlock3d(x, this.getStairBaseY(step) + 0.25, z, "slab", 1, 0.5, 1);
+    block.step = step;
+    return block;
+  }
+
+  createPlatformBlock3d(x, step, z) {
+    const block = this.createBlock3d(x, this.getStairBaseY(step) + 0.5, z, "platform", 1, 1, 1);
+    block.step = step;
+    return block;
+  }
+
   getStairStepCount(height) {
-    return height * 2;
+    return height;
   }
 
-  getSlabCenterY(step) {
-    return (step - 1) * 0.5 + 0.25;
+  getStairCenterY(step) {
+    return this.getStairBaseY(step) + 0.5;
   }
 
-  getSlabBottomY(step) {
-    return (step - 1) * 0.5;
-  }
-
-  getSupportUnitCount(height) {
-    return Math.ceil(height * 2);
+  getStairBaseY(step) {
+    return step - 1;
   }
 
   createSupportColumnBlocks(x, z, height) {
+    return this.createSupportSegmentBlocks(x, z, 0, height);
+  }
+
+  createSupportSegmentBlocks(x, z, fromHeight, toHeight) {
+    const height = toHeight - fromHeight;
     if (height <= 0) {
       return [];
     }
     const blocks = [];
-    const halfUnits = this.getSupportUnitCount(height);
+    const fullBlocks = Math.floor(height);
+    let cursor = fromHeight;
 
-    for (let unit = 0; unit < halfUnits; unit += 1) {
-      blocks.push(this.createBlock3d(x, unit * 0.5 + 0.25, z, "support", 0.88, 0.5, 0.88));
+    for (let level = 0; level < fullBlocks; level += 1) {
+      blocks.push(this.createBlock3d(x, cursor + 0.5, z, "support", 0.9, 1, 0.9));
+      cursor += 1;
+    }
+
+    const remainingHeight = height - fullBlocks;
+    if (remainingHeight > 0.01) {
+      blocks.push(this.createBlock3d(
+        x,
+        cursor + remainingHeight / 2,
+        z,
+        "support",
+        0.9,
+        remainingHeight,
+        0.9
+      ));
     }
 
     return blocks;
+  }
+
+  createStairBaseBlocks(x, z, baseHeight) {
+    return this.createSupportColumnBlocks(x, z, baseHeight);
+  }
+
+  addGroundSupportsForFloatingBlocks(blocks) {
+    const epsilon = 0.001;
+    const requiredColumns = new Map();
+
+    for (const block of blocks) {
+      if (block.kind !== "stair" && block.kind !== "slab" && block.kind !== "platform") {
+        continue;
+      }
+
+      const bottom = this.getBlockBottomY(block);
+      if (bottom <= epsilon) {
+        continue;
+      }
+
+      const key = this.getColumnKey(block.x, block.z);
+      const required = requiredColumns.get(key);
+      if (!required || bottom > required.height) {
+        requiredColumns.set(key, { x: block.x, z: block.z, height: bottom });
+      }
+    }
+
+    const supportBlocks = [];
+    for (const column of requiredColumns.values()) {
+      const intervals = blocks
+        .filter((block) => this.getColumnKey(block.x, block.z) === this.getColumnKey(column.x, column.z))
+        .map((block) => ({
+          start: Math.max(0, this.getBlockBottomY(block)),
+          end: Math.min(column.height, this.getBlockTopY(block))
+        }))
+        .filter((interval) => interval.end > 0 && interval.start < column.height)
+        .sort((a, b) => a.start - b.start || b.end - a.end);
+
+      let cursor = 0;
+      for (const interval of intervals) {
+        if (interval.start > cursor + epsilon) {
+          supportBlocks.push(...this.createSupportSegmentBlocks(column.x, column.z, cursor, interval.start));
+        }
+        cursor = Math.max(cursor, interval.end);
+        if (cursor >= column.height - epsilon) {
+          break;
+        }
+      }
+
+      if (cursor < column.height - epsilon) {
+        supportBlocks.push(...this.createSupportSegmentBlocks(column.x, column.z, cursor, column.height));
+      }
+    }
+
+    blocks.push(...supportBlocks);
+    return supportBlocks.length;
+  }
+
+  getBlockBottomY(block) {
+    return block.y - block.height / 2;
+  }
+
+  getBlockTopY(block) {
+    return block.y + block.height / 2;
+  }
+
+  getColumnKey(x, z) {
+    return `${Math.round(x * 1000) / 1000},${Math.round(z * 1000) / 1000}`;
+  }
+
+  quantizeRotation90(rotationY) {
+    const quarterTurn = Math.PI / 2;
+    return Math.round(rotationY / quarterTurn) * quarterTurn;
+  }
+
+  getStairRotationFromVector(directionX, directionZ) {
+    return this.quantizeRotation90(Math.atan2(directionX, directionZ));
   }
 
   createCoreBlocks(height, x = 0, z = 0) {
@@ -502,26 +640,30 @@ class MinecraftBuilderStudio {
 
     for (let step = 1; step <= stepCount; step += 1) {
       const row = rows - margin - step;
-      const supportHeight = this.getSlabBottomY(step);
+      const supportHeight = this.getStairBaseY(step);
       for (let x = 0; x < width; x += 1) {
         cells[row][x + margin] = this.createStepCell(step);
         const x3d = x - xOffset;
         const supportBlocks = this.createSupportColumnBlocks(x3d, step - 1, supportHeight);
         blocks3d.push(...supportBlocks);
         supportUnitCount += supportBlocks.length;
-        blocks3d.push(this.createBlock3d(x3d, this.getSlabCenterY(step), step - 1));
+        blocks3d.push(this.createStairBlock3d(x3d, step, step - 1));
       }
       buildPlan.push({
         level: step,
-        label: `Dalle ${step}`,
-        detail: `Pose ${width} dalle${width > 1 ? "s" : ""} à ${this.formatHalfBlockHeight(step)}, avec le remplissage dessous jusqu'au sol.`
+        label: `Marche ${step}`,
+        detail: `Pose ${this.formatStairBlockCount(width)} ${this.formatStairLevel(step)}, orientés vers l'avant, avec des blocs pleins de support dessous si nécessaire.`
       });
     }
+
+    supportUnitCount += this.addGroundSupportsForFloatingBlocks(blocks3d);
 
     return {
       cells,
       cols,
       rows,
+      stairBlockCount: stepCount * width,
+      slabBlockCount: 0,
       blockCount: stepCount * width + supportUnitCount,
       footprint: `${width} × ${stepCount}`,
       sideCells: this.generateStairsSideView(height, stepCount, type),
@@ -535,6 +677,7 @@ class MinecraftBuilderStudio {
     const stepCount = this.getStairStepCount(height);
     const innerRadius = 1.35;
     const turnPerStep = Math.PI / 4;
+    const sectorHalfTurn = turnPerStep * 0.5;
     const turnSign = direction === "left" ? -1 : 1;
     const gridRadius = Math.ceil(innerRadius + walkwayWidth + 0.85);
     const footprint = gridRadius * 2 + 1;
@@ -547,15 +690,23 @@ class MinecraftBuilderStudio {
     const blocks3d = this.createCoreBlocks(height + 1);
     const placements = [];
     let supportUnitCount = 0;
+    let stairBlockCount = 0;
+    let slabBlockCount = 0;
+    let platformBlockCount = 0;
     cells[center + margin][center + margin] = this.createCoreCell("P");
 
     for (let step = 1; step <= stepCount; step += 1) {
       const angle = -Math.PI / 2 + (step - 1) * turnPerStep * turnSign;
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
-      const sectorStart = angle - turnPerStep * 0.55;
-      const sectorEnd = angle + turnPerStep * 0.55;
-      const supportHeight = this.getSlabBottomY(step);
+      const exitAngle = angle + turnPerStep * 0.5 * turnSign;
+      const fallbackStairRotation = this.getStairRotationFromVector(
+        -Math.sin(exitAngle) * turnSign,
+        Math.cos(exitAngle) * turnSign
+      );
+      const sectorStart = angle - sectorHalfTurn;
+      const sectorEnd = angle + sectorHalfTurn;
+      const supportHeight = this.getStairBaseY(step);
       const stepPositions = this.getSpiralStepPositions(
         gridRadius,
         innerRadius,
@@ -564,39 +715,105 @@ class MinecraftBuilderStudio {
         sectorEnd,
         angle
       );
+      const nextAngle = -Math.PI / 2 + step * turnPerStep * turnSign;
+      const nextStepPositions = step < stepCount
+        ? this.getSpiralStepPositions(
+          gridRadius,
+          innerRadius,
+          walkwayWidth,
+          nextAngle - sectorHalfTurn,
+          nextAngle + sectorHalfTurn,
+          nextAngle
+        )
+        : [];
+      const stairRotations = this.selectSpiralStairBand(
+        stepPositions,
+        exitAngle,
+        walkwayWidth,
+        nextStepPositions,
+        fallbackStairRotation
+      );
+      let stepStairCount = 0;
+      let stepSlabCount = 0;
+      let stepPlatformCount = 0;
 
       for (const position of stepPositions) {
         const projectionX = center + position.x;
         const projectionY = center + position.z;
-        cells[projectionY + margin][projectionX + margin] = this.createStepCell(step);
+        const key = this.getPositionKey(position.x, position.z);
+        const transition = stairRotations.get(key);
+        const isStair = transition && transition.kind === "stair";
+        const isPlatform = transition && transition.kind === "platform";
+        const cellRow = projectionY + margin;
+        const cellCol = projectionX + margin;
+        if (isStair || isPlatform || this.getCellKind(cells[cellRow][cellCol]) !== "stair") {
+          cells[cellRow][cellCol] = isStair
+            ? this.createStepCell(step)
+            : isPlatform
+              ? this.createPlatformCell(step)
+              : this.createSlabCell(step);
+        }
 
-        if (position.support) {
-          const supportBlocks = this.createSupportColumnBlocks(position.x, position.z, supportHeight);
+        if (isStair || isPlatform) {
+          const supportBlocks = position.support
+            ? this.createSupportColumnBlocks(position.x, position.z, supportHeight)
+            : this.createStairBaseBlocks(position.x, position.z, supportHeight);
           blocks3d.push(...supportBlocks);
           supportUnitCount += supportBlocks.length;
+          if (isStair) {
+            blocks3d.push(this.createStairBlock3d(
+              position.x,
+              step,
+              position.z,
+              transition.rotationY
+            ));
+            stairBlockCount += 1;
+            stepStairCount += 1;
+          } else {
+            blocks3d.push(this.createPlatformBlock3d(position.x, step, position.z));
+            platformBlockCount += 1;
+            stepPlatformCount += 1;
+          }
+        } else {
+          if (position.support) {
+            const supportBlocks = this.createSupportColumnBlocks(position.x, position.z, supportHeight);
+            blocks3d.push(...supportBlocks);
+            supportUnitCount += supportBlocks.length;
+          }
+          blocks3d.push(this.createSlabBlock3d(position.x, step, position.z));
+          slabBlockCount += 1;
+          stepSlabCount += 1;
         }
-        blocks3d.push(this.createBlock3d(position.x, this.getSlabCenterY(step), position.z));
-        placements.push({ step, x: position.x, z: position.z, support: position.support });
+        placements.push({
+          step,
+          x: position.x,
+          z: position.z,
+          support: position.support || isStair || isPlatform,
+          kind: isStair ? "stair" : isPlatform ? "platform" : "slab"
+        });
       }
 
       const sideLabel = this.getSpiralPositionLabel(
         Math.round(cos),
         Math.round(sin)
       );
-      const quarterTurn = Math.round(((step - 1) * 45) % 360);
       buildPlan.push({
         level: step,
-        label: `Dalle ${step}`,
-        detail: `Pose une plateforme de ${stepPositions.length} dalle${stepPositions.length > 1 ? "s" : ""} à ${this.formatHalfBlockHeight(step)}, ${sideLabel} du pilier, puis mets les supports seulement en bordure.`
+        label: `Marche ${step}`,
+        detail: `Pose ${this.formatStairBlockCount(stepStairCount)} contre la bordure du niveau suivant, ${this.formatPlatformBlockCount(stepPlatformCount)} de transition, puis ${this.formatSlabBlockCount(stepSlabCount)} de palier ${this.formatStairLevel(step)}, ${sideLabel} du pilier.`
       });
     }
 
-    const blockCount = placements.length + height + 1 + supportUnitCount;
+    supportUnitCount += this.addGroundSupportsForFloatingBlocks(blocks3d);
+    const blockCount = stairBlockCount + slabBlockCount + platformBlockCount + height + 1 + supportUnitCount;
 
     return {
       cells,
       cols,
       rows,
+      stairBlockCount,
+      slabBlockCount,
+      platformBlockCount,
       blockCount,
       footprint: `${footprint} × ${footprint}`,
       sideCells: this.generateStairsSideView(height, stepCount, "spiral", walkwayWidth, placements),
@@ -648,6 +865,192 @@ class MinecraftBuilderStudio {
     });
   }
 
+  selectSpiralStairBand(positions, targetAngle, walkwayWidth, nextPositions = [], fallbackRotation = 0) {
+    const selected = new Map();
+    if (positions.length === 0) {
+      return selected;
+    }
+
+    const nextKeys = new Set(nextPositions.map((position) => this.getPositionKey(position.x, position.z)));
+    for (const position of positions) {
+      const directions = this.getAdjacentDirections(position.x, position.z, nextKeys, targetAngle);
+      if (directions.length === 1) {
+        const direction = directions[0];
+        selected.set(
+          this.getPositionKey(position.x, position.z),
+          {
+            kind: "stair",
+            rotationY: this.getStairRotationFromVector(direction.x, direction.z)
+          }
+        );
+      } else if (directions.length > 1) {
+        selected.set(this.getPositionKey(position.x, position.z), { kind: "platform" });
+      }
+    }
+
+    if (selected.size > 0) {
+      return selected;
+    }
+
+    const radii = positions.map((position) => Math.hypot(position.x, position.z));
+    const minRadius = Math.min(...radii);
+    const maxRadius = Math.max(...radii);
+    for (let band = 0; band < walkwayWidth; band += 1) {
+      const ratio = walkwayWidth === 1 ? 0.5 : band / (walkwayWidth - 1);
+      const targetRadius = minRadius + (maxRadius - minRadius) * ratio;
+      let bestPosition = null;
+      let bestScore = Infinity;
+
+      for (const position of positions) {
+        const key = this.getPositionKey(position.x, position.z);
+        if (selected.has(key)) {
+          continue;
+        }
+
+        const radius = Math.hypot(position.x, position.z);
+        const angleOffset = Math.abs(this.normalizeAngle(Math.atan2(position.z, position.x) - targetAngle));
+        const score = Math.abs(radius - targetRadius) * 1.35 + angleOffset * 4;
+        if (score < bestScore) {
+          bestScore = score;
+          bestPosition = position;
+        }
+      }
+
+      if (bestPosition) {
+        selected.set(this.getPositionKey(bestPosition.x, bestPosition.z), {
+          kind: "stair",
+          rotationY: fallbackRotation
+        });
+      }
+    }
+
+    if (selected.size === 0) {
+      const closest = positions.reduce((best, position) => {
+        const angleOffset = Math.abs(this.normalizeAngle(Math.atan2(position.z, position.x) - targetAngle));
+        return !best || angleOffset < best.angleOffset ? { position, angleOffset } : best;
+      }, null);
+      if (closest) {
+        selected.set(this.getPositionKey(closest.position.x, closest.position.z), {
+          kind: "stair",
+          rotationY: fallbackRotation
+        });
+      }
+    }
+
+    return selected;
+  }
+
+  selectCurvedStairBand(positions, targetAngle, pivotX, pivotY, mirror, width, nextPositions = []) {
+    const selected = new Map();
+    if (positions.length === 0) {
+      return selected;
+    }
+
+    const nextKeys = new Set(nextPositions.map((position) => this.getPositionKey(position.x, position.y)));
+    for (const position of positions) {
+      const directions = this.getAdjacentDirections(position.x, position.y, nextKeys, targetAngle);
+      if (directions.length === 1) {
+        const direction = directions[0];
+        selected.set(
+          this.getPositionKey(position.x, position.y),
+          {
+            kind: "stair",
+            rotationY: this.getStairRotationFromVector(direction.x, direction.z)
+          }
+        );
+      } else if (directions.length > 1) {
+        selected.set(this.getPositionKey(position.x, position.y), { kind: "platform" });
+      }
+    }
+
+    if (selected.size > 0) {
+      return selected;
+    }
+
+    const radii = positions.map((position) => Math.hypot(
+      (position.x - pivotX) * mirror,
+      position.y - pivotY
+    ));
+    const minRadius = Math.min(...radii);
+    const maxRadius = Math.max(...radii);
+    const fallbackRotation = this.getStairRotationFromVector(
+      -Math.sin(targetAngle) * mirror,
+      Math.cos(targetAngle)
+    );
+
+    for (let band = 0; band < width; band += 1) {
+      const ratio = width === 1 ? 0.5 : band / (width - 1);
+      const targetRadius = maxRadius - (maxRadius - minRadius) * ratio;
+      let bestPosition = null;
+      let bestScore = Infinity;
+
+      for (const position of positions) {
+        const key = this.getPositionKey(position.x, position.y);
+        if (selected.has(key)) {
+          continue;
+        }
+
+        const normalizedX = (position.x - pivotX) * mirror;
+        const normalizedY = position.y - pivotY;
+        const currentRadius = Math.hypot(normalizedX, normalizedY);
+        const angleOffset = Math.abs(this.normalizeAngle(Math.atan2(normalizedY, normalizedX) - targetAngle));
+        const score = Math.abs(currentRadius - targetRadius) * 1.35 + angleOffset * 4;
+        if (score < bestScore) {
+          bestScore = score;
+          bestPosition = position;
+        }
+      }
+
+      if (bestPosition) {
+        selected.set(this.getPositionKey(bestPosition.x, bestPosition.y), {
+          kind: "stair",
+          rotationY: fallbackRotation
+        });
+      }
+    }
+
+    if (selected.size === 0) {
+      const closest = positions.reduce((best, position) => {
+        const normalizedX = (position.x - pivotX) * mirror;
+        const normalizedY = position.y - pivotY;
+        const angleOffset = Math.abs(this.normalizeAngle(Math.atan2(normalizedY, normalizedX) - targetAngle));
+        return !best || angleOffset < best.angleOffset ? { position, angleOffset } : best;
+      }, null);
+      if (closest) {
+        selected.set(this.getPositionKey(closest.position.x, closest.position.y), {
+          kind: "stair",
+          rotationY: fallbackRotation
+        });
+      }
+    }
+
+    return selected;
+  }
+
+  getAdjacentDirections(x, z, positionKeys, targetAngle) {
+    const directions = [
+      { x: 0, z: 1 },
+      { x: 1, z: 0 },
+      { x: 0, z: -1 },
+      { x: -1, z: 0 }
+    ];
+
+    return directions
+      .filter((direction) => positionKeys.has(this.getPositionKey(x + direction.x, z + direction.z)))
+      .map((direction) => {
+        const angle = Math.atan2(direction.z, direction.x);
+        return {
+          ...direction,
+          score: Math.abs(this.normalizeAngle(angle - targetAngle))
+        };
+      })
+      .sort((a, b) => a.score - b.score);
+  }
+
+  getPositionKey(x, z) {
+    return `${x},${z}`;
+  }
+
   normalizeAngle(angle) {
     let normalized = angle;
     while (normalized <= -Math.PI) {
@@ -680,7 +1083,11 @@ class MinecraftBuilderStudio {
     const angleEnd = Math.PI * 1.5;
     const buildPlan = [];
     const blocks3d = [];
+    const placements = [];
     let supportUnitCount = 0;
+    let stairBlockCount = 0;
+    let slabBlockCount = 0;
+    let platformBlockCount = 0;
 
     const stepsByLevel = Array.from({ length: stepCount + 1 }, () => new Map());
     const innerRadius = radius - width + 0.25;
@@ -713,9 +1120,15 @@ class MinecraftBuilderStudio {
     }
 
     for (let step = 1; step <= stepCount; step += 1) {
-      const ratio = stepCount === 1 ? 0 : (step - 1) / (stepCount - 1);
-      const angle = angleStart + totalAngle * ratio;
-      const supportHeight = this.getSlabBottomY(step);
+      const sectorStart = angleStart + totalAngle * ((step - 1) / stepCount);
+      const sectorEnd = angleStart + totalAngle * (step / stepCount);
+      const angle = (sectorStart + sectorEnd) / 2;
+      const exitAngle = sectorEnd;
+      const supportHeight = this.getStairBaseY(step);
+      const stairRotation = this.getStairRotationFromVector(
+        -Math.sin(exitAngle) * mirror,
+        Math.cos(exitAngle)
+      );
 
       for (let band = 0; band < width; band += 1) {
         const currentRadius = radius - band;
@@ -726,47 +1139,119 @@ class MinecraftBuilderStudio {
         }
       }
 
-      for (const position of stepsByLevel[step].values()) {
-        cells[position.y + margin][position.x + margin] = this.createStepCell(step);
+      const stepPositions = Array.from(stepsByLevel[step].values());
+      const stairKeys = this.selectCurvedStairBand(
+        stepPositions,
+        exitAngle,
+        pivotX,
+        pivotY,
+        mirror,
+        width,
+        step < stepCount ? Array.from(stepsByLevel[step + 1].values()) : []
+      );
+      let stepStairCount = 0;
+      let stepSlabCount = 0;
+      let stepPlatformCount = 0;
+
+      for (const position of stepPositions) {
         const x3d = position.x - pivotX;
         const z3d = position.y - pivotY;
-        const supportBlocks = this.createSupportColumnBlocks(x3d, z3d, supportHeight);
-        blocks3d.push(...supportBlocks);
-        supportUnitCount += supportBlocks.length;
-        blocks3d.push(this.createBlock3d(x3d, this.getSlabCenterY(step), z3d));
+        const normalizedX = x3d * mirror;
+        const distance = Math.hypot(normalizedX, z3d);
+        const support = distance <= innerRadius + 0.45 || distance >= outerRadius - 0.45;
+        const key = this.getPositionKey(position.x, position.y);
+        const transition = stairKeys.get(key);
+        const isStair = transition && transition.kind === "stair";
+        const isPlatform = transition && transition.kind === "platform";
+
+        const cellRow = position.y + margin;
+        const cellCol = position.x + margin;
+        if (isStair || isPlatform || this.getCellKind(cells[cellRow][cellCol]) !== "stair") {
+          cells[cellRow][cellCol] = isStair
+            ? this.createStepCell(step)
+            : isPlatform
+              ? this.createPlatformCell(step)
+              : this.createSlabCell(step);
+        }
+
+        if (isStair || isPlatform) {
+          const supportBlocks = support
+            ? this.createSupportColumnBlocks(x3d, z3d, supportHeight)
+            : this.createStairBaseBlocks(x3d, z3d, supportHeight);
+          blocks3d.push(...supportBlocks);
+          supportUnitCount += supportBlocks.length;
+          if (isStair) {
+            blocks3d.push(this.createStairBlock3d(x3d, step, z3d, transition.rotationY || stairRotation));
+            stairBlockCount += 1;
+            stepStairCount += 1;
+          } else {
+            blocks3d.push(this.createPlatformBlock3d(x3d, step, z3d));
+            platformBlockCount += 1;
+            stepPlatformCount += 1;
+          }
+        } else {
+          if (support) {
+            const supportBlocks = this.createSupportColumnBlocks(x3d, z3d, supportHeight);
+            blocks3d.push(...supportBlocks);
+            supportUnitCount += supportBlocks.length;
+          }
+          blocks3d.push(this.createSlabBlock3d(x3d, step, z3d));
+          slabBlockCount += 1;
+          stepSlabCount += 1;
+        }
+
+        placements.push({
+          step,
+          x: x3d,
+          z: z3d,
+          support: support || isStair || isPlatform,
+          kind: isStair ? "stair" : isPlatform ? "platform" : "slab"
+        });
       }
 
-      const turn = Math.round(ratio * 90);
       buildPlan.push({
         level: step,
-        label: `Dalle ${step}`,
-        detail: `Pose une bande de ${width} dalle${width > 1 ? "s" : ""} à ${this.formatHalfBlockHeight(step)}, en arrondissant vers la ${CURVED_DIRECTION_LABELS[direction].toLowerCase()}.`
+        label: `Marche ${step}`,
+        detail: `Pose ${this.formatStairBlockCount(stepStairCount)} contre la bordure du niveau suivant, ${this.formatPlatformBlockCount(stepPlatformCount)} de transition, puis ${this.formatSlabBlockCount(stepSlabCount)} de palier ${this.formatStairLevel(step)}, en arrondissant vers la ${CURVED_DIRECTION_LABELS[direction].toLowerCase()}.`
       });
     }
 
-    const blockCount = cells.reduce(
-      (total, row) => total + row.filter((cell) => this.isBlockCell(cell)).length,
-      0
-    ) + supportUnitCount;
+    supportUnitCount += this.addGroundSupportsForFloatingBlocks(blocks3d);
+    const blockCount = stairBlockCount + slabBlockCount + platformBlockCount + supportUnitCount;
 
     return {
       cells,
       cols,
       rows,
+      stairBlockCount,
+      slabBlockCount,
+      platformBlockCount,
       blockCount,
       footprint: `${footprint} × ${footprint}`,
-      sideCells: this.generateStairsSideView(height, stepCount, "curved"),
+      sideCells: this.generateStairsSideView(height, stepCount, "curved", width, placements),
       blocks3d,
       buildPlan
     };
   }
 
-  formatHalfBlockHeight(step) {
-    const height = step / 2;
-    if (Number.isInteger(height)) {
-      return `${height} bloc${height > 1 ? "s" : ""} de hauteur`;
+  formatStairLevel(step) {
+    const level = this.getStairBaseY(step);
+    if (level === 0) {
+      return "au niveau du sol";
     }
-    return `${Math.floor(height)} bloc${height > 1 ? "s" : ""} + 1 dalle de hauteur`;
+    return `au niveau ${level}`;
+  }
+
+  formatStairBlockCount(count) {
+    return `${count} bloc${count > 1 ? "s" : ""} escalier${count > 1 ? "s" : ""}`;
+  }
+
+  formatSlabBlockCount(count) {
+    return `${count} dalle${count > 1 ? "s" : ""}`;
+  }
+
+  formatPlatformBlockCount(count) {
+    return `${count} bloc${count > 1 ? "s" : ""}`;
   }
 
   getSpiralPositionLabel(dx, dy) {
@@ -785,7 +1270,7 @@ class MinecraftBuilderStudio {
   }
 
   generateStairsSideView(height, length, type, width = 1, placements = []) {
-    if (type === "spiral") {
+    if ((type === "spiral" || type === "curved") && placements.length > 0) {
       return this.generateSpiralSideView(height, length, width, placements);
     }
 
@@ -837,7 +1322,14 @@ class MinecraftBuilderStudio {
           }
         }
       }
-      cells[row][col] = this.createStepCell(placement.step);
+      const placementCell = placement.kind === "stair"
+        ? this.createStepCell(placement.step)
+        : placement.kind === "platform"
+          ? this.createPlatformCell(placement.step)
+          : this.createSlabCell(placement.step);
+      if (!cells[row][col] || placement.kind === "stair" || placement.kind === "platform") {
+        cells[row][col] = placementCell;
+      }
     }
 
     return cells;
@@ -944,11 +1436,19 @@ class MinecraftBuilderStudio {
       ["Type", STAIR_TYPE_LABELS[type]],
       ["Hauteur totale", `${height} blocs`],
       ["Largeur", `${this.stairsWidthInput.value} blocs`],
-      ["Dalles à monter", `${this.getStairStepCount(height)}`],
+      ["Blocs escaliers", `${stairs.stairBlockCount}`],
       ["Emprise au sol", stairs.footprint],
       ["Blocs estimés", `~${stairs.blockCount}`],
       ["Grille affichée", `${stairs.cols} × ${stairs.rows}`]
     ];
+
+    if (stairs.slabBlockCount > 0) {
+      stats.splice(5, 0, ["Dalles de palier", `${stairs.slabBlockCount}`]);
+    }
+
+    if (stairs.platformBlockCount > 0) {
+      stats.splice(5, 0, ["Blocs de transition", `${stairs.platformBlockCount}`]);
+    }
 
     if (type === "spiral") {
       stats.splice(2, 0, ["Sens du colimaçon", CURVED_DIRECTION_LABELS[curvedDirection]]);
@@ -1671,6 +2171,11 @@ class MinecraftBuilderStudio {
   }
 
   addMinecraftBox(group, block, showEdges) {
+    if (block.kind === "stair") {
+      this.addMinecraftStairBlock(group, block, showEdges);
+      return;
+    }
+
     const THREE = window.THREE;
     const geometry = new THREE.BoxGeometry(block.width, block.height, block.depth);
     const material = this.getThreeMaterial(block.kind);
@@ -1685,13 +2190,7 @@ class MinecraftBuilderStudio {
       return;
     }
 
-    const edgeColor = block.kind === "core"
-      ? 0x1f2937
-      : block.kind === "support"
-        ? 0x083344
-        : block.kind === "sphere"
-          ? 0x14532d
-          : 0x3f2a12;
+    const edgeColor = this.getBlockEdgeColor(block.kind);
     const edges = new THREE.LineSegments(
       new THREE.EdgesGeometry(geometry),
       new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: 0.30 })
@@ -1701,13 +2200,85 @@ class MinecraftBuilderStudio {
     group.add(edges);
   }
 
+  addMinecraftStairBlock(group, block, showEdges) {
+    const THREE = window.THREE;
+    const stairGroup = new THREE.Group();
+    const material = this.getThreeMaterial("stair");
+    const pieces = [
+      {
+        geometry: new THREE.BoxGeometry(block.width, block.height / 2, block.depth),
+        y: -block.height / 4,
+        z: 0
+      },
+      {
+        geometry: new THREE.BoxGeometry(block.width, block.height / 2, block.depth / 2),
+        y: block.height / 4,
+        z: block.depth / 4
+      }
+    ];
+
+    stairGroup.position.set(block.x, block.y, block.z);
+    stairGroup.rotation.y = block.rotationY || 0;
+
+    for (const piece of pieces) {
+      const mesh = new THREE.Mesh(piece.geometry, material);
+      mesh.position.set(0, piece.y, piece.z);
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+      stairGroup.add(mesh);
+
+      if (showEdges) {
+        const edges = new THREE.LineSegments(
+          new THREE.EdgesGeometry(piece.geometry),
+          new THREE.LineBasicMaterial({
+            color: this.getBlockEdgeColor("stair"),
+            transparent: true,
+            opacity: 0.34
+          })
+        );
+        edges.position.copy(mesh.position);
+        stairGroup.add(edges);
+      }
+    }
+
+    group.add(stairGroup);
+  }
+
+  getBlockEdgeColor(kind) {
+    if (kind === "core") {
+      return 0x1f2937;
+    }
+    if (kind === "support") {
+      return 0x083344;
+    }
+    if (kind === "sphere") {
+      return 0x14532d;
+    }
+    if (kind === "stair") {
+      return 0x5f3510;
+    }
+    if (kind === "slab") {
+      return 0x78350f;
+    }
+    if (kind === "platform") {
+      return 0x3f2a12;
+    }
+    return 0x3f2a12;
+  }
+
   addInstancedMinecraftBoxes(group, blocks) {
     const THREE = window.THREE;
     const groupedBlocks = new Map();
+    const stairBlocks = [];
 
     for (const block of blocks) {
+      if (block.kind === "stair") {
+        stairBlocks.push(block);
+        continue;
+      }
+
       const key = [
-        block.kind || "slab",
+        block.kind || "block",
         block.width,
         block.height,
         block.depth
@@ -1735,16 +2306,61 @@ class MinecraftBuilderStudio {
       mesh.instanceMatrix.needsUpdate = true;
       group.add(mesh);
     }
+
+    if (stairBlocks.length > 0) {
+      this.addInstancedStairBlocks(group, stairBlocks);
+    }
+  }
+
+  addInstancedStairBlocks(group, blocks) {
+    const THREE = window.THREE;
+    const material = this.getThreeMaterial("stair");
+    const lowerGeometry = new THREE.BoxGeometry(1, 0.5, 1);
+    const upperGeometry = new THREE.BoxGeometry(1, 0.5, 0.5);
+    const lowerMesh = new THREE.InstancedMesh(lowerGeometry, material, blocks.length);
+    const upperMesh = new THREE.InstancedMesh(upperGeometry, material, blocks.length);
+    const dummy = new THREE.Object3D();
+
+    blocks.forEach((block, index) => {
+      const rotationY = block.rotationY || 0;
+      const width = block.width || 1;
+      const height = block.height || 1;
+      const depth = block.depth || 1;
+
+      dummy.position.set(block.x, block.y - height / 4, block.z);
+      dummy.rotation.set(0, rotationY, 0);
+      dummy.scale.set(width, height, depth);
+      dummy.updateMatrix();
+      lowerMesh.setMatrixAt(index, dummy.matrix);
+
+      dummy.position.set(
+        block.x + Math.sin(rotationY) * depth / 4,
+        block.y + height / 4,
+        block.z + Math.cos(rotationY) * depth / 4
+      );
+      dummy.rotation.set(0, rotationY, 0);
+      dummy.scale.set(width, height, depth);
+      dummy.updateMatrix();
+      upperMesh.setMatrixAt(index, dummy.matrix);
+    });
+
+    lowerMesh.instanceMatrix.needsUpdate = true;
+    upperMesh.instanceMatrix.needsUpdate = true;
+    lowerMesh.receiveShadow = true;
+    upperMesh.receiveShadow = true;
+    group.add(lowerMesh);
+    group.add(upperMesh);
   }
 
   getThreeMaterial(kind) {
     const THREE = window.THREE;
-    const cacheKey = kind || "slab";
+    const cacheKey = kind || "block";
     if (this.threeState.materials.has(cacheKey)) {
       return this.threeState.materials.get(cacheKey);
     }
 
     const palettes = {
+      block: ["#4ade80", "#16a34a", "#86efac", "#166534"],
       core: ["#6b7280", "#4b5563", "#9ca3af", "#374151"],
       support: ["#38bdf8", "#0e7490", "#67e8f9", "#155e75"],
       sphere: ["#4ade80c5", "#16a34a93", "#86efadc0", "#15803c48"],
@@ -1758,16 +2374,18 @@ class MinecraftBuilderStudio {
       water: ["#0284c7", "#0369a1", "#38bdf8", "#075985"],
       crop: ["#65a30d", "#4d7c0f", "#84cc16", "#365314"],
       fence: ["#a16207", "#854d0e", "#ca8a04", "#713f12"],
-      slab: ["#b7791f", "#92400e", "#d97706", "#78350f"]
+      stair: ["#d59a3a", "#9a5b16", "#f3b65d", "#6b3510"],
+      slab: ["#c58a2b", "#8f5518", "#e7ad55", "#6f3a12"],
+      platform: ["#9f6b2f", "#704214", "#c18a45", "#4a2a0d"]
     };
-    const texture = this.createPixelTexture(palettes[cacheKey] || palettes.slab);
+    const texture = this.createPixelTexture(palettes[cacheKey] || palettes.block);
     const isTranslucent = cacheKey === "support" || cacheKey === "glass" || cacheKey === "water";
     const material = new THREE.MeshStandardMaterial({
       map: texture,
       roughness: 0.92,
       metalness: 0,
       transparent: isTranslucent,
-      opacity: cacheKey === "support" ? 0.3 : cacheKey === "glass" || cacheKey === "water" ? 0.72 : 1,
+      opacity: cacheKey === "support" ? 0.42 : cacheKey === "glass" || cacheKey === "water" ? 0.72 : 1,
       depthWrite: !isTranslucent
     });
     this.threeState.materials.set(cacheKey, material);
@@ -1895,8 +2513,14 @@ class MinecraftBuilderStudio {
     this.currentCells.forEach((row, y) => {
       row.forEach((cell, x) => {
         ctx.fillStyle = this.isBlockCell(cell) ? '#22c55e' : '#0b1020';
+        if (this.getCellKind(cell) === 'stair') {
+          ctx.fillStyle = '#d59a3a';
+        }
         if (this.getCellKind(cell) === 'slab') {
-          ctx.fillStyle = '#d97706';
+          ctx.fillStyle = '#c58a2b';
+        }
+        if (this.getCellKind(cell) === 'platform') {
+          ctx.fillStyle = '#9f6b2f';
         }
         if (this.getCellKind(cell) === 'core') {
           ctx.fillStyle = '#64748b';
