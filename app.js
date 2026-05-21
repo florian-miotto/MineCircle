@@ -82,6 +82,7 @@ class MinecraftBuilderStudio {
     this.sphereLayerSlider = document.getElementById("sphere-layer-input");
     this.sphereLayerLabel = document.getElementById("sphere-layer-label");
     this.futureServicesContainer = document.getElementById("future-services");
+    this.toggleSupports3dBtn = document.getElementById("toggle-supports-3d");
     this.currentCells = null;
     this.sphereLayers = null;
     this.sphereStats = null;
@@ -89,6 +90,7 @@ class MinecraftBuilderStudio {
     this.structureCatalog = [...DEFAULT_STRUCTURE_CATALOG];
     this.selectedStructureId = this.structureCatalog[0].id;
     this.threeState = null;
+    this.showSupports3d = true;
     this.bindEvents();
     this.renderStructureCatalog();
     this.loadStructureCatalog();
@@ -139,6 +141,12 @@ class MinecraftBuilderStudio {
       }
       this.currentSphereLayerIndex = Number(this.sphereLayerSlider.value) - 1;
       this.renderSphereLayer();
+    });
+
+    this.toggleSupports3dBtn.addEventListener("click", () => {
+      this.showSupports3d = !this.showSupports3d;
+      this.toggleSupports3dBtn.textContent = this.showSupports3d ? "Masquer les supports (3D)" : "Afficher les supports (3D)";
+      this.drawCurrentTool();
     });
 
     window.addEventListener("resize", () => {
@@ -1801,7 +1809,11 @@ class MinecraftBuilderStudio {
     const { scene, camera, renderer, group } = this.threeState;
     this.threeState.structureLoadToken = null;
     group.clear();
-    const centeredBlocks = this.centerBlocksForThreeView(blocks);
+
+    // On filtre les blocs de support si l'option est désactivée
+    const filteredBlocks = this.showSupports3d ? blocks : blocks.filter(b => b.kind !== 'support');
+
+    const centeredBlocks = this.centerBlocksForThreeView(filteredBlocks);
 
     const maxY = centeredBlocks.reduce((max, block) => Math.max(max, block.y + block.height / 2), 1);
     const minY = centeredBlocks.reduce((min, block) => Math.min(min, block.y - block.height / 2), 0);
