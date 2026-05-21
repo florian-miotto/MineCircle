@@ -15,14 +15,16 @@
     <section class="workspace">
       <aside class="panel controls-panel">
         <div class="tool-selector-section">
-          <h2>Sélectionnez un outil</h2>
-          <select id="tool-select" name="tool">
-            <option value="circle">Cercle</option>
-            <option value="sphere">Sphère</option>
-            <option value="porch">Porche / Entrée monumentale</option>
-            <option value="stairs">Escalier</option>
-            <option value="structures">Structures</option>
-          </select>
+          <h2>Outil à utiliser</h2>
+          <div class="select-wrapper">
+            <select id="tool-select" name="tool" class="menu-select">
+              <option value="circle">⭕ Cercle</option>
+              <option value="sphere">🌐 Sphère</option>
+              <option value="porch">⛩️ Porche / Entrée</option>
+              <option value="stairs">📶 Escalier</option>
+              <option value="structures">🏗️ Structures</option>
+            </select>
+          </div>
         </div>
         <div class="tool-settings-section">
           <h3>Paramètres</h3>
@@ -45,11 +47,13 @@
             <label for="porch-thickness-input">Épaisseur du cadre (en blocs)</label>
             <input id="porch-thickness-input" name="porch-thickness" type="number" min="1" max="24" step="1" value="2" required>
             <label for="porch-style-input">Style du haut</label>
-            <select id="porch-style-input" name="porch-style">
-              <option value="rounded">Arrondi</option>
-              <option value="pointed">En pointe</option>
-              <option value="medieval">Médiéval</option>
-            </select>
+            <div class="select-wrapper">
+              <select id="porch-style-input" name="porch-style" class="menu-select">
+                <option value="rounded">⬤ Arrondi</option>
+                <option value="pointed">▲ En pointe</option>
+                <option value="medieval">🏰 Médiéval</option>
+              </select>
+            </div>
           </div>
           <div class="tool-controls hidden" data-tool-target="stairs">
             <label for="stairs-height-input">Hauteur totale (en blocs)</label>
@@ -57,17 +61,21 @@
             <label for="stairs-width-input">Largeur (en blocs)</label>
             <input id="stairs-width-input" name="stairs-width" type="number" min="1" max="16" step="1" value="5" required>
             <label for="stairs-type-input">Type d'escalier</label>
-            <select id="stairs-type-input" name="stairs-type">
-              <option value="straight">Tout droit</option>
-              <option value="spiral">En colimaçon</option>
-              <option value="curved">Arrondi</option>
-            </select>
+            <div class="select-wrapper">
+              <select id="stairs-type-input" name="stairs-type" class="menu-select">
+                <option value="straight">➞ Tout droit</option>
+                <option value="spiral">🌀 En colimaçon</option>
+                <option value="curved">↪️ Arrondi / Courbé</option>
+              </select>
+            </div>
             <div id="stairs-turn-control" class="stair-turn-control hidden">
               <label id="stairs-turn-label" for="stairs-turn-input">Sens de rotation</label>
-              <select id="stairs-turn-input" name="stairs-turn">
-                <option value="right">Droite</option>
-                <option value="left">Gauche</option>
-              </select>
+              <div class="select-wrapper">
+                <select id="stairs-turn-input" name="stairs-turn" class="menu-select">
+                  <option value="right">➡️ Droite</option>
+                  <option value="left">⬅️ Gauche</option>
+                </select>
+              </div>
             </div>
           </div>
           <div class="tool-controls hidden" data-tool-target="structures">

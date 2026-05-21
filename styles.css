@@ -150,8 +150,38 @@ select {
   padding: 0.55rem 0.6rem;
 }
 
-select {
-  appearance: none;
+/* Styles pour rendre les menus (select) interactifs et évidents */
+.menu-select {
+  appearance: none; /* Supprime le style par défaut du navigateur */
+  cursor: pointer;
+  font-weight: 600;
+  border: 2px solid var(--panel-border);
+  /* Flèche de menu personnalisée via une image de fond */
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2322c55e' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
+  background-size: 1.1em 1.1em;
+  padding-right: 2.5rem; /* Espace pour la flèche */
+  transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
+}
+
+.menu-select:hover {
+  border-color: var(--accent);
+  background-color: #243146;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.15);
+}
+
+.menu-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3);
+}
+
+/* Conteneur pour s'assurer que les menus prennent toute la place */
+.select-wrapper {
+  position: relative;
+  width: 100%;
+  margin-bottom: 0.5rem;
 }
 
 .structure-list {
@@ -241,8 +271,23 @@ button:hover {
   gap: 0.45rem;
 }
 
+/* Animation pour les changements d'outil */
 .tool-controls.hidden {
-  display: none;
+  opacity: 0;
+  transform: translateY(10px); /* Déplace légèrement vers le bas lors de la disparition */
+  pointer-events: none; /* Empêche les interactions lorsque l'élément est masqué */
+  max-height: 0; /* Réduit la hauteur à zéro pour masquer l'espace */
+  visibility: hidden; /* Cache complètement l'élément après la transition */
+  /* Transition pour la disparition (pas de délai pour la hauteur et la visibilité) */
+  transition: opacity 0.3s ease-in, transform 0.3s ease-in, max-height 0.3s ease-in, visibility 0.3s ease-in;
+}
+
+.tool-controls:not(.hidden) {
+  /* Transitions pour l'apparition (délai pour la hauteur et la visibilité) */
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out, max-height 0.3s ease-out 0.1s, visibility 0.3s ease-out 0.1s;
+  max-height: 500px; /* Une valeur suffisamment grande pour la hauteur maximale */
+  overflow: hidden; /* Cache le contenu qui dépasse la hauteur maximale pendant la transition */
+  transform-origin: top left; /* Point d'origine de la transformation */
 }
 
 .stair-turn-control {
