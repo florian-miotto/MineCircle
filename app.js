@@ -94,6 +94,7 @@ class MinecraftBuilderStudio {
     this.bindEvents();
     this.renderStructureCatalog();
     this.loadStructureCatalog();
+    this.initStructureStream();
     this.renderFutureServices();
     this.syncVisibleControls();
     this.drawCurrentTool();
@@ -254,6 +255,51 @@ class MinecraftBuilderStudio {
       }
     } catch (error) {
       console.info("Catalogue GLB automatique indisponible, fallback local utilisé.", error);
+    }
+  }
+
+  initStructureStream() {
+    if (typeof EventSource === "undefined") {
+      return;
+    }
+
+    try {
+      const source = new EventSource("./structures/stream");
+      source.onmessage = (evt) => {
+        try {
+          const structures = JSON.parse(evt.data);
+          if (!Array.isArray(structures) || structures.length === 0) {
+            return;
+          }
+
+          this.structureCatalog = structures
+            .filter((structure) => structure && structure.modelUrl)
+            .map((structure) => ({
+              id: structure.id || structure.fileName || structure.modelUrl,
+              title: structure.title || structure.fileName || "Structure",
+              description: structure.description || "Structure GLB du dossier du site.",
+              fileName: structure.fileName || structure.modelUrl.replace(/^\.\//, ""),
+              modelUrl: structure.modelUrl
+            }));
+
+          if (!this.structureCatalog.some((s) => s.id === this.selectedStructureId)) {
+            this.selectedStructureId = this.structureCatalog[0].id;
+          }
+
+          this.renderStructureCatalog();
+          if (this.toolSelect.value === "structures") {
+            this.drawCurrentTool();
+          }
+        } catch (e) {
+          console.info("Erreur parsing structures stream", e);
+        }
+      };
+
+      source.onerror = () => {
+        // EventSource reconnects automatically; nothing to do.
+      };
+    } catch (e) {
+      console.info("Impossible d'initialiser le flux de structures.", e);
     }
   }
 

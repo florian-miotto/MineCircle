@@ -328,7 +328,7 @@ button:hover {
 
 .secondary-button {
   color: #dbeafe;
-  background: #1d4ed8;
+  background: #4873eb;
 }
 
 .secondary-button:hover {
@@ -666,3 +666,21 @@ button:hover {
     font-size: 0.58rem;
   }
 }
+
+/* Subtilité visuelle pour le bouton de masquage des supports (3D)
+   - Rendre le bouton plus discret que le bouton d'exportation
+   - Conserver la palette sombre et garder un léger feedback au survol */
+#toggle-supports-3d.secondary-button {
+  background: rgba(148, 148, 148, 0.342);
+  color: var(--muted);
+  border: 1px solid rgba(226, 232, 240, 0.06);
+  padding: 0.35rem 0.75rem;
+  font-weight: 500;
+  box-shadow: 0 0 6px rgba(148, 148, 148, 0.2);
+}
+
+#toggle-supports-3d.secondary-button:hover {
+  background: rgba(255, 255, 255, 0.137);
+  color: var(--text);
+}
+
