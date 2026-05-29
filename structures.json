@@ -1,0 +1,16 @@
+[
+  {
+    "id": "mine",
+    "title": "Mine",
+    "description": "Structure importée depuis le fichier mine.glb du projet.",
+    "fileName": "mine.glb",
+    "modelUrl": "./mine.glb"
+  },
+  {
+    "id": "machine1",
+    "title": "Machine 1",
+    "description": "Structure de machine importée depuis le fichier machine 1.glb.",
+    "fileName": "machine 1.glb",
+    "modelUrl": "./machine 1.glb"
+  }
+]

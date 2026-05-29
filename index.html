@@ -79,8 +79,13 @@
             </div>
           </div>
           <div class="tool-controls hidden" data-tool-target="structures">
-            <label>Structures disponibles</label>
-            <div id="structure-list" class="structure-list" aria-label="Liste des structures disponibles"></div>
+            <label for="structure-selector">Structures disponibles</label>
+            <div class="structures-container">
+              <div class="structure-list-wrapper">
+                <div id="structure-list" class="structure-list" aria-label="Liste des structures disponibles"></div>
+                <p id="structure-loading" class="hint structures-loading hidden">Chargement des structures...</p>
+              </div>
+            </div>
             <p class="hint">Les structures affichées correspondent aux fichiers GLB présents dans le dossier du site.</p>
           </div>
           <div class="input-row input-row-submit">
@@ -97,6 +102,11 @@
             <div id="stairs-3d-view" class="stairs-3d-view" role="img" aria-label="Vue 3D de la structure"></div>
             <div class="three-footer">
               <p id="stairs-3d-status" class="three-status"></p>
+              <div id="construction-controls" class="construction-controls hidden">
+                <button id="prev-step-button" type="button" class="secondary-button">◀ Précédent</button>
+                <span id="step-counter" class="step-counter">Étape 1 / 1</span>
+                <button id="next-step-button" type="button" class="secondary-button">Suivant ▶</button>
+              </div>
               <button id="toggle-supports-3d" type="button" class="secondary-button">Masquer les supports (3D)</button>
             </div>
           </div>
@@ -139,6 +149,7 @@
     </section>
   </main>
   <script src="./vendor/three.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js" defer></script>
   <script src="./app.js" defer></script>
 </body>
 </html>
