@@ -83,6 +83,8 @@ class MinecraftBuilderStudio {
     this.sphereLayerLabel = document.getElementById("sphere-layer-label");
     this.futureServicesContainer = document.getElementById("future-services");
     this.toggleSupports3dBtn = document.getElementById("toggle-supports-3d");
+    this.sphereSolidToggle = document.getElementById("sphere-solid-toggle");
+    this.sphereSolid = Boolean(this.sphereSolidToggle && this.sphereSolidToggle.checked);
     this.structureLoadingMessage = document.getElementById("structure-loading");
     this.constructionControlsContainer = document.getElementById("construction-controls");
     this.prevStepButton = document.getElementById("prev-step-button");
@@ -156,6 +158,16 @@ class MinecraftBuilderStudio {
       this.toggleSupports3dBtn.textContent = this.showSupports3d ? "Masquer les supports (3D)" : "Afficher les supports (3D)";
       this.drawCurrentTool();
     });
+
+    if (this.sphereSolidToggle) {
+      this.sphereSolidToggle.addEventListener('change', () => {
+        this.sphereSolid = Boolean(this.sphereSolidToggle.checked);
+        // Re-générer si on est sur la vue sphère
+        if (this.toolSelect && this.toolSelect.value === 'sphere') {
+          this.drawCurrentTool();
+        }
+      });
+    }
 
     this.prevStepButton.addEventListener("click", () => {
       this.goToPreviousStep();
@@ -371,7 +383,10 @@ class MinecraftBuilderStudio {
         const row = [];
         for (let x = 0; x < size; x += 1) {
           const distanceToCenter = Math.hypot(x - center, y - center);
-          const isBlock = distanceToCenter <= layerRadius && distanceToCenter > layerRadius - 1;
+          // Si 'sphereSolid' est vrai, on remplit la sphère (pleine), sinon on garde la coque
+          const isBlock = this.sphereSolid
+            ? distanceToCenter <= layerRadius
+            : distanceToCenter <= layerRadius && distanceToCenter > layerRadius - 1;
           row.push(isBlock);
           if (isBlock) {
             blockCount += 1;
@@ -1898,9 +1913,10 @@ class MinecraftBuilderStudio {
       const radius = Math.hypot(block.x, block.z) + Math.max(block.width, block.depth);
       return Math.max(max, radius);
     }, 3);
-    const showEdges = centeredBlocks.length <= 900;
+    const showEdges = (this.toolSelect && this.toolSelect.value === 'sphere') ? true : centeredBlocks.length <= 900;
 
-    if (centeredBlocks.length > 1200) {
+    const instancedThreshold = (this.toolSelect && this.toolSelect.value === 'sphere') ? Infinity : 1200;
+    if (centeredBlocks.length > instancedThreshold) {
       this.addInstancedMinecraftBoxes(group, centeredBlocks);
     } else {
       for (const block of centeredBlocks) {
@@ -2283,13 +2299,21 @@ class MinecraftBuilderStudio {
     }
 
     const edgeColor = this.getBlockEdgeColor(block.kind);
-    const edges = new THREE.LineSegments(
-      new THREE.EdgesGeometry(geometry),
-      new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: 0.30 })
-    );
+    // Pour la sphère, augmenter l'opacité et la visibilité des arêtes
+    const edgeOpacity = block.kind === 'sphere' ? 0.72 : 0.30;
+    const edgeMaterial = new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: edgeOpacity });
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), edgeMaterial);
     edges.position.copy(mesh.position);
     edges.rotation.copy(mesh.rotation);
     group.add(edges);
+    if (block.kind === 'sphere' || block.kind === 'stone') {
+      const outlineMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
+      const outline = new THREE.Mesh(geometry.clone(), outlineMat);
+      outline.position.copy(mesh.position);
+      outline.rotation.copy(mesh.rotation);
+      outline.scale.set(1.03, 1.03, 1.03);
+      group.add(outline);
+    }
   }
 
   addMinecraftStairBlock(group, block, showEdges) {
@@ -2452,10 +2476,11 @@ class MinecraftBuilderStudio {
       scene.remove(this.threeState.grid);
     }
 
-    const showEdges = centeredBlocks.length <= 900;
+    const showEdges = (this.toolSelect && this.toolSelect.value === 'sphere') ? true : centeredBlocks.length <= 900;
     const blockMeshes = [];
+    const instancedThreshold = (this.toolSelect && this.toolSelect.value === 'sphere') ? Infinity : 1200;
 
-    if (centeredBlocks.length > 1200) {
+    if (centeredBlocks.length > instancedThreshold) {
       this.addInstancedMinecraftBoxes(group, centeredBlocks);
     } else {
       for (const block of centeredBlocks) {
@@ -2510,15 +2535,28 @@ class MinecraftBuilderStudio {
 
     if (showEdges) {
       const edgeColor = this.getBlockEdgeColor(block.kind);
+      const edgeOpacity = block.kind === 'sphere' ? 0.72 : 0.30;
       const edges = new THREE.LineSegments(
         new THREE.EdgesGeometry(geometry),
-        new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: 0.30 })
+        new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: edgeOpacity })
       );
       edges.position.copy(mesh.position);
       edges.rotation.copy(mesh.rotation);
       edges.scale.set(0, 0, 0);
       group.add(edges);
       mesh.userData.edgesMesh = edges;
+      // Outline plus épais en noir (backside shell) pour une bordure visible
+      if (block.kind === 'sphere' || block.kind === 'stone') {
+        const outlineMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
+        const outline = new THREE.Mesh(geometry.clone(), outlineMat);
+        outline.position.copy(mesh.position);
+        outline.rotation.copy(mesh.rotation);
+        outline.scale.set(0, 0, 0);
+        // légèrement plus grand pour créer un contour
+        outline.userData.scaleTarget = 1.03;
+        group.add(outline);
+        mesh.userData.outlineMesh = outline;
+      }
     }
 
     return mesh;
@@ -2533,6 +2571,10 @@ class MinecraftBuilderStudio {
         if (mesh.userData.edgesMesh) {
           mesh.userData.edgesMesh.scale.set(1, 1, 1);
         }
+        if (mesh.userData.outlineMesh) {
+          const target = mesh.userData.outlineMesh.userData.scaleTarget || 1.03;
+          mesh.userData.outlineMesh.scale.set(target, target, target);
+        }
       }
       return;
     }
@@ -2541,6 +2583,9 @@ class MinecraftBuilderStudio {
       mesh.scale.set(0, 0, 0);
       if (mesh.userData.edgesMesh) {
         mesh.userData.edgesMesh.scale.set(0, 0, 0);
+      }
+      if (mesh.userData.outlineMesh) {
+        mesh.userData.outlineMesh.scale.set(0, 0, 0);
       }
     }
 
@@ -2564,6 +2609,17 @@ class MinecraftBuilderStudio {
           x: 1,
           y: 1,
           z: 1,
+          duration,
+          delay,
+          ease: "back.out"
+        }, "<");
+      }
+      if (mesh.userData.outlineMesh) {
+        const target = mesh.userData.outlineMesh.userData.scaleTarget || 1.03;
+        GSAP.to(mesh.userData.outlineMesh.scale, {
+          x: target,
+          y: target,
+          z: target,
           duration,
           delay,
           ease: "back.out"
@@ -2684,6 +2740,19 @@ class MinecraftBuilderStudio {
       slab: ["#c58a2b", "#8f5518", "#e7ad55", "#6f3a12"],
       platform: ["#9f6b2f", "#704214", "#c18a45", "#4a2a0d"]
     };
+    // Fournir une vraie texture de pierre grise pour la clé 'stone' et pour les sphères
+    if (kind === 'stone' || kind === 'sphere') {
+      const tex = this.createStoneTexture();
+      const mat = new THREE.MeshStandardMaterial({
+        map: tex,
+        roughness: 0.88,
+        metalness: 0,
+        transparent: false,
+        depthWrite: true
+      });
+      this.threeState.materials.set(kind, mat);
+      return mat;
+    }
     const texture = this.createPixelTexture(palettes[cacheKey] || palettes.block);
     const isTranslucent = cacheKey === "support" || cacheKey === "glass" || cacheKey === "water";
     const material = new THREE.MeshStandardMaterial({
@@ -2720,6 +2789,50 @@ class MinecraftBuilderStudio {
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(1, 1);
+    return texture;
+  }
+
+  createStoneTexture() {
+    const THREE = window.THREE;
+    const size = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    // Fond gris
+    ctx.fillStyle = '#8f8f8f';
+    ctx.fillRect(0, 0, size, size);
+
+    // Ajouter du bruit granuleux
+    for (let i = 0; i < 4000; i++) {
+      const x = Math.floor(Math.random() * size);
+      const y = Math.floor(Math.random() * size);
+      const v = Math.floor(200 + Math.random() * 55);
+      const a = 0.06 + Math.random() * 0.18;
+      ctx.fillStyle = `rgba(${v},${v},${v},${a})`;
+      ctx.fillRect(x, y, 1, 1);
+    }
+
+    // Petites veines plus sombres
+    for (let i = 0; i < 60; i++) {
+      ctx.beginPath();
+      const startX = Math.random() * size;
+      const startY = Math.random() * size;
+      ctx.moveTo(startX, startY);
+      for (let j = 0; j < 8; j++) {
+        ctx.lineTo(startX + Math.random() * 12 - 6 + j * 2, startY + Math.random() * 6 - 3);
+      }
+      ctx.strokeStyle = `rgba(60,60,60,${0.15 + Math.random() * 0.18})`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(1, 1);
+    texture.anisotropy = 1;
     return texture;
   }
 
@@ -3046,202 +3159,6 @@ class MinecraftBuilderStudio {
       return;
     }
 
-    for (const mesh of blockMeshes) {
-      mesh.scale.set(0, 0, 0);
-      if (mesh.userData.edgesMesh) {
-        mesh.userData.edgesMesh.scale.set(0, 0, 0);
-      }
-    }
-
-    const duration = 0.4;
-    const delayIncrement = 0.05;
-
-    blockMeshes.forEach((mesh, index) => {
-      const delay = goingBackward ? (blockMeshes.length - index - 1) * delayIncrement : index * delayIncrement;
-      
-      GSAP.to(mesh.scale, {
-        x: 1,
-        y: 1,
-        z: 1,
-        duration,
-        delay,
-        ease: "back.out"
-      });
-
-      if (mesh.userData.edgesMesh) {
-        GSAP.to(mesh.userData.edgesMesh.scale, {
-          x: 1,
-          y: 1,
-          z: 1,
-          duration,
-          delay,
-          ease: "back.out"
-        }, "<");
-      }
-    });
-  }
-
-  updateConstructionUI() {
-    // Mettre à jour la visibilité et l'état des boutons
-    const hasSteps = this.buildSteps.length > 0;
-    this.constructionControlsContainer.classList.toggle("hidden", !hasSteps);
-    
-    if (!hasSteps) {
-      return;
-    }
-    
-    const isFirstStep = this.currentBuildStep === 0;
-    const isLastStep = this.currentBuildStep === this.buildSteps.length - 1;
-    
-    this.prevStepButton.disabled = isFirstStep;
-    this.nextStepButton.disabled = isLastStep;
-    
-    this.stepCounter.textContent = "Étape " + (this.currentBuildStep + 1) + " / " + this.buildSteps.length;
-  }
-
-  goToPreviousStep() {
-    if (this.currentBuildStep > 0) {
-      this.currentBuildStep--;
-      this.renderCurrentBuildStep(true);
-    }
-  }
-
-  goToNextStep() {
-    if (this.currentBuildStep < this.buildSteps.length - 1) {
-      this.currentBuildStep++;
-      this.renderCurrentBuildStep(false);
-    }
-  }
-
-  renderCurrentBuildStep(goingBackward = false) {
-    if (this.buildSteps.length === 0) {
-      return;
-    }
-    
-    const currentStepBlocks = this.buildSteps[this.currentBuildStep];
-    this.updateConstructionUI();
-    
-    // Afficher uniquement les blocs de l'étape actuelle dans la vue 3D avec animation
-    this.renderThreeBlocksWithAnimation(currentStepBlocks, goingBackward);
-  }
-
-  renderThreeBlocksWithAnimation(blocks, goingBackward = false) {
-    if (!this.initThreeView()) {
-      return;
-    }
-
-    const THREE = window.THREE;
-    const { scene, camera, renderer, group } = this.threeState;
-    this.threeState.structureLoadToken = null;
-    
-    // Filtrer les blocs de support si nécessaire
-    const filteredBlocks = this.showSupports3d ? blocks : blocks.filter(b => b.kind !== 'support');
-    const centeredBlocks = this.centerBlocksForThreeView(filteredBlocks);
-
-    // Calculer les paramètres de caméra
-    const maxY = centeredBlocks.reduce((max, block) => Math.max(max, block.y + block.height / 2), 1);
-    const minY = centeredBlocks.reduce((min, block) => Math.min(min, block.y - block.height / 2), 0);
-    const heightSpan = Math.max(1, maxY - minY);
-    const maxRadius = centeredBlocks.reduce((max, block) => {
-      const radius = Math.hypot(block.x, block.z) + Math.max(block.width, block.depth);
-      return Math.max(max, radius);
-    }, 3);
-
-    // Nettoyer le groupe et la grille
-    group.clear();
-    if (this.threeState.grid) {
-      scene.remove(this.threeState.grid);
-    }
-
-    // Ajouter les blocs avec animation
-    const showEdges = centeredBlocks.length <= 900;
-    const blockMeshes = [];
-
-    // Créer les blocs et les ajouter au groupe
-    if (centeredBlocks.length > 1200) {
-      this.addInstancedMinecraftBoxes(group, centeredBlocks);
-    } else {
-      for (const block of centeredBlocks) {
-        const mesh = this.createBlockMesh(group, block, showEdges);
-        if (mesh) {
-          blockMeshes.push(mesh);
-        }
-      }
-    }
-
-    // Ajouter la grille
-    const gridSize = Math.max(8, maxRadius * 2.6);
-    const grid = new THREE.GridHelper(gridSize, Math.ceil(gridSize));
-    grid.position.y = minY - 0.02;
-    grid.material.color.set(0x334155);
-    grid.material.opacity = 0.28;
-    grid.material.transparent = true;
-    scene.add(grid);
-    this.threeState.grid = grid;
-
-    // Mettre à jour la caméra
-    this.threeState.targetY = (minY + maxY) * 0.5;
-    this.threeState.minCameraDistance = Math.max(5, maxRadius * 0.9);
-    this.threeState.maxCameraDistance = Math.max(22, maxRadius * 5, heightSpan * 2.6);
-    this.threeState.cameraDistance = Math.max(10, maxRadius * 2.35, heightSpan * 1.25);
-    this.positionThreeCamera();
-
-    // Animer l'apparition des blocs avec GSAP
-    this.animateBlocksAppearance(blockMeshes, goingBackward);
-
-    renderer.render(scene, camera);
-    this.threeStatus.textContent = "Glissez pour tourner. Utilisez la molette pour zoomer.";
-  }
-
-  createBlockMesh(group, block, showEdges) {
-    const THREE = window.THREE;
-    
-    if (block.kind === "stair") {
-      this.addMinecraftStairBlock(group, block, showEdges);
-      return null;
-    }
-
-    const geometry = new THREE.BoxGeometry(block.width, block.height, block.depth);
-    const material = this.getThreeMaterial(block.kind);
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(block.x, block.y, block.z);
-    mesh.rotation.y = block.rotationY || 0;
-    mesh.castShadow = false;
-    mesh.receiveShadow = true;
-    mesh.scale.set(0, 0, 0); // Démarrer petit pour l'animation
-    group.add(mesh);
-
-    if (showEdges) {
-      const edgeColor = this.getBlockEdgeColor(block.kind);
-      const edges = new THREE.LineSegments(
-        new THREE.EdgesGeometry(geometry),
-        new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: 0.30 })
-      );
-      edges.position.copy(mesh.position);
-      edges.rotation.copy(mesh.rotation);
-      edges.scale.set(0, 0, 0); // Démarrer petit pour l'animation
-      group.add(edges);
-      mesh.userData.edgesMesh = edges;
-    }
-
-    return mesh;
-  }
-
-  animateBlocksAppearance(blockMeshes, goingBackward = false) {
-    const GSAP = window.gsap;
-    
-    if (!GSAP) {
-      // Si GSAP n'est pas disponible, afficher directement les blocs
-      for (const mesh of blockMeshes) {
-        mesh.scale.set(1, 1, 1);
-        if (mesh.userData.edgesMesh) {
-          mesh.userData.edgesMesh.scale.set(1, 1, 1);
-        }
-      }
-      return;
-    }
-
-    // Réinitialiser l'échelle
     for (const mesh of blockMeshes) {
       mesh.scale.set(0, 0, 0);
       if (mesh.userData.edgesMesh) {

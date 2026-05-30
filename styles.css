@@ -237,6 +237,16 @@ select {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
+.input-row label[for="sphere-solid-toggle"] {
+  margin-right: 0.6rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+#sphere-solid-toggle {
+  transform: translateY(2px);
+}
+
 .structure-card-title {
   font-size: 0.94rem;
   font-weight: 700;
