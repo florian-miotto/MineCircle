@@ -20,6 +20,19 @@ function titleFromFileName(fileName) {
     .join(" ");
 }
 
+function getGlbStructures(files) {
+  return files
+    .filter((fileName) => path.extname(fileName).toLowerCase() === ".glb")
+    .sort((a, b) => a.localeCompare(b))
+    .map((fileName) => ({
+      id: path.basename(fileName, ".glb").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      title: titleFromFileName(fileName),
+      description: `Structure chargee depuis le fichier ${fileName}.`,
+      fileName,
+      modelUrl: `./${fileName}`
+    }));
+}
+
 http.createServer((request, response) => {
   const pathname = decodeURIComponent(new URL(request.url, "http://localhost").pathname);
 
@@ -31,16 +44,7 @@ http.createServer((request, response) => {
         return;
       }
 
-      const structures = files
-        .filter((fileName) => path.extname(fileName).toLowerCase() === ".glb")
-        .sort((a, b) => a.localeCompare(b))
-        .map((fileName) => ({
-          id: path.basename(fileName, ".glb").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-          title: titleFromFileName(fileName),
-          description: `Structure chargee depuis le fichier ${fileName}.`,
-          fileName,
-          modelUrl: `./${fileName}`
-        }));
+      const structures = getGlbStructures(files);
 
       response.writeHead(200, { "Content-Type": contentTypes[".json"] });
       response.end(JSON.stringify(structures));
@@ -64,16 +68,7 @@ http.createServer((request, response) => {
           return;
         }
 
-        const structures = files
-          .filter((fileName) => path.extname(fileName).toLowerCase() === '.glb')
-          .sort((a, b) => a.localeCompare(b))
-          .map((fileName) => ({
-            id: path.basename(fileName, '.glb').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-            title: titleFromFileName(fileName),
-            description: `Structure chargee depuis le fichier ${fileName}.`,
-            fileName,
-            modelUrl: `./${fileName}`
-          }));
+        const structures = getGlbStructures(files);
 
         response.write(`data: ${JSON.stringify(structures)}\n\n`);
       });
