@@ -22,8 +22,10 @@
             <select id="tool-select" name="tool" class="menu-select">
               <option value="circle">⭕ Cercle</option>
               <option value="sphere">🌐 Sphère</option>
+              <option value="dome">🏟️ Dôme</option>
               <option value="porch">⛩️ Porche / Entrée</option>
               <option value="stairs">📶 Escalier</option>
+              <option value="script">✍️ Script</option>
               <option value="structures">🏗️ Structures</option>
             </select>
           </div>
@@ -61,6 +63,20 @@
               </select>
             </div>
           </div>
+          <div class="tool-controls hidden" data-tool-target="dome">
+            <label for="dome-diameter-input">Diamètre au sol (en blocs)</label>
+            <input id="dome-diameter-input" name="dome-diameter" type="number" min="3" max="96" step="1" value="21" required>
+            <label for="dome-stretch-input">Étirement vertical</label>
+            <input id="dome-stretch-input" name="dome-stretch" type="range" min="0.5" max="3" step="0.1" value="1.4">
+            <p id="dome-stretch-label" class="sphere-layer-label">Étirement ×1.4</p>
+            <label for="dome-layer-input">Couche du dôme</label>
+            <input id="dome-layer-input" type="range" min="1" max="1" step="1" value="1">
+            <p id="dome-layer-label" class="sphere-layer-label">Couche 1 / 1</p>
+            <div class="input-row">
+              <label for="dome-solid-toggle">Dôme plein</label>
+              <input id="dome-solid-toggle" name="dome-solid" type="checkbox">
+            </div>
+          </div>
           <div class="tool-controls hidden" data-tool-target="stairs">
             <label for="stairs-height-input">Hauteur totale (en blocs)</label>
             <input id="stairs-height-input" name="stairs-height" type="number" min="1" max="128" step="1" value="12" required>
@@ -83,6 +99,17 @@
                 </select>
               </div>
             </div>
+          </div>
+          <div class="tool-controls hidden" data-tool-target="script">
+            <label for="script-text-input">Texte</label>
+            <input id="script-text-input" name="script-text" type="text" maxlength="32" value="MINECRAFT" required>
+            <label for="script-size-input">Taille</label>
+            <input id="script-size-input" name="script-size" type="number" min="1" max="8" step="1" value="2" required>
+            <label for="script-weight-input">Finesse du trait</label>
+            <input id="script-weight-input" name="script-weight" type="range" min="1" max="3" step="1" value="1">
+            <p id="script-weight-label" class="sphere-layer-label">Trait fin</p>
+            <label for="script-spacing-input">Espacement</label>
+            <input id="script-spacing-input" name="script-spacing" type="number" min="0" max="8" step="1" value="1" required>
           </div>
           <div class="tool-controls hidden" data-tool-target="structures">
             <label for="structure-selector">Structures disponibles</label>
@@ -142,6 +169,8 @@
           <span><i class="swatch swatch-slab"></i> Dalle / palier plat</span>
           <span><i class="swatch swatch-platform"></i> Bloc de transition</span>
           <span><i class="swatch swatch-core"></i> Bloc plein / pilier</span>
+          <span><i class="swatch swatch-dome"></i> Bloc de dôme</span>
+          <span><i class="swatch swatch-script"></i> Bloc de script</span>
           <span><i class="swatch swatch-support"></i> Remplissage sécurité</span>
           <span><i class="swatch swatch-empty"></i> Case vide</span>
         </p>

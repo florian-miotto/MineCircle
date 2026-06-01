@@ -72,6 +72,24 @@ function createSupportCell() {
   };
 }
 
+function createDomeCell(level) {
+  return {
+    block: true,
+    kind: "dome",
+    label: "",
+    title: `Dôme couche ${level}`
+  };
+}
+
+function createScriptCell() {
+  return {
+    block: true,
+    kind: "script",
+    label: "",
+    title: "Bloc de texte"
+  };
+}
+
 // Helpers de création de blocs 3D
 function createBlock3d(x, y, z, kind = "block", width = 1, height = 1, depth = 1, rotationY = 0) {
   return { x, y, z, kind, width, height, depth, rotationY };
@@ -624,6 +642,59 @@ export function generateSpiralSideView(height, stepCount, width, placements) {
   return cells;
 }
 
+const SCRIPT_FONT = Object.freeze({
+  " ": ["00000", "00000", "00000", "00000", "00000", "00000", "00000"],
+  "?": ["11110", "00001", "00001", "00110", "00100", "00000", "00100"],
+  "!": ["00100", "00100", "00100", "00100", "00100", "00000", "00100"],
+  ".": ["00000", "00000", "00000", "00000", "00000", "00000", "00100"],
+  "-": ["00000", "00000", "00000", "11111", "00000", "00000", "00000"],
+  "_": ["00000", "00000", "00000", "00000", "00000", "00000", "11111"],
+  "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
+  "1": ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
+  "2": ["01110", "10001", "00001", "00010", "00100", "01000", "11111"],
+  "3": ["11110", "00001", "00001", "01110", "00001", "00001", "11110"],
+  "4": ["00010", "00110", "01010", "10010", "11111", "00010", "00010"],
+  "5": ["11111", "10000", "10000", "11110", "00001", "00001", "11110"],
+  "6": ["01110", "10000", "10000", "11110", "10001", "10001", "01110"],
+  "7": ["11111", "00001", "00010", "00100", "01000", "01000", "01000"],
+  "8": ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
+  "9": ["01110", "10001", "10001", "01111", "00001", "00001", "01110"],
+  A: ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
+  B: ["11110", "10001", "10001", "11110", "10001", "10001", "11110"],
+  C: ["01111", "10000", "10000", "10000", "10000", "10000", "01111"],
+  D: ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
+  E: ["11111", "10000", "10000", "11110", "10000", "10000", "11111"],
+  F: ["11111", "10000", "10000", "11110", "10000", "10000", "10000"],
+  G: ["01111", "10000", "10000", "10011", "10001", "10001", "01110"],
+  H: ["10001", "10001", "10001", "11111", "10001", "10001", "10001"],
+  I: ["11111", "00100", "00100", "00100", "00100", "00100", "11111"],
+  J: ["00111", "00010", "00010", "00010", "00010", "10010", "01100"],
+  K: ["10001", "10010", "10100", "11000", "10100", "10010", "10001"],
+  L: ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
+  M: ["10001", "11011", "10101", "10101", "10001", "10001", "10001"],
+  N: ["10001", "11001", "10101", "10011", "10001", "10001", "10001"],
+  O: ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
+  P: ["11110", "10001", "10001", "11110", "10000", "10000", "10000"],
+  Q: ["01110", "10001", "10001", "10001", "10101", "10010", "01101"],
+  R: ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
+  S: ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
+  T: ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
+  U: ["10001", "10001", "10001", "10001", "10001", "10001", "01110"],
+  V: ["10001", "10001", "10001", "10001", "10001", "01010", "00100"],
+  W: ["10001", "10001", "10001", "10101", "10101", "10101", "01010"],
+  X: ["10001", "10001", "01010", "00100", "01010", "10001", "10001"],
+  Y: ["10001", "10001", "01010", "00100", "00100", "00100", "00100"],
+  Z: ["11111", "00001", "00010", "00100", "01000", "10000", "11111"]
+});
+
+function normalizeScriptText(text) {
+  return String(text || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .slice(0, 32);
+}
+
 // -------------------------------------------------------------
 // GÉNÉRATEURS PUBLICS
 // -------------------------------------------------------------
@@ -718,6 +789,151 @@ export function generateSphereBlocks3d(layers) {
   }
 
   return blocks;
+}
+
+export function generateDomeLayers(diameter, heightStretch = 1, domeSolid = false) {
+  const margin = 2;
+  const size = diameter + margin * 2;
+  const radius = diameter / 2;
+  const center = (size - 1) / 2;
+  const stretch = Math.max(0.5, Math.min(3, Number(heightStretch) || 1));
+  const layerCount = Math.max(1, Math.round(radius * stretch));
+  const layers = [];
+  let blockCount = 0;
+
+  for (let layerIndex = 0; layerIndex < layerCount; layerIndex += 1) {
+    const verticalRatio = layerCount === 1 ? 0 : layerIndex / Math.max(1, layerCount - 1);
+    const layerRadius = Math.max(0.75, radius * Math.sqrt(Math.max(0, 1 - verticalRatio * verticalRatio)));
+    const cells = [];
+
+    for (let z = 0; z < size; z += 1) {
+      const row = [];
+      for (let x = 0; x < size; x += 1) {
+        const distanceToCenter = Math.hypot(x - center, z - center);
+        const isBlock = domeSolid
+          ? distanceToCenter <= layerRadius
+          : distanceToCenter <= layerRadius && distanceToCenter > layerRadius - 1;
+        const cell = isBlock ? createDomeCell(layerIndex + 1) : false;
+        row.push(cell);
+        if (isBlock) {
+          blockCount += 1;
+        }
+      }
+      cells.push(row);
+    }
+
+    layers.push(cells);
+  }
+
+  return { layers, cols: size, rows: size, blockCount, layerCount };
+}
+
+export function generateDomeBlocks3d(layers) {
+  if (!layers || layers.length === 0) {
+    return [];
+  }
+
+  const blocks = [];
+  const rows = layers[0].length;
+  const cols = layers[0][0].length;
+  const centerX = (cols - 1) / 2;
+  const centerZ = (rows - 1) / 2;
+
+  for (let layerIndex = 0; layerIndex < layers.length; layerIndex += 1) {
+    const layer = layers[layerIndex];
+    for (let z = 0; z < rows; z += 1) {
+      for (let x = 0; x < cols; x += 1) {
+        if (isBlockCell(layer[z][x])) {
+          blocks.push(createBlock3d(
+            x - centerX,
+            layerIndex + 0.5,
+            z - centerZ,
+            "dome",
+            1,
+            1,
+            1
+          ));
+        }
+      }
+    }
+  }
+
+  return blocks;
+}
+
+export function generateScriptGrid(text, size = 2, weight = 1, spacing = 1) {
+  const normalizedText = normalizeScriptText(text).trim() || "SCRIPT";
+  const scale = Math.max(1, Math.min(8, Number(size) || 1));
+  const strokeWeight = Math.max(1, Math.min(3, Number(weight) || 1));
+  const letterSpacing = Math.max(0, Math.min(8, Number(spacing) || 0));
+  const glyphHeight = 7;
+  const glyphWidth = 5;
+  const logicalWidth = normalizedText.length * glyphWidth + Math.max(0, normalizedText.length - 1) * letterSpacing;
+  const logicalCells = Array.from({ length: glyphHeight }, () => Array(logicalWidth).fill(false));
+  let cursor = 0;
+
+  for (const char of normalizedText) {
+    const glyph = SCRIPT_FONT[char] || SCRIPT_FONT["?"];
+    for (let y = 0; y < glyphHeight; y += 1) {
+      for (let x = 0; x < glyphWidth; x += 1) {
+        if (glyph[y][x] !== "1") {
+          continue;
+        }
+        for (let dy = 0; dy < strokeWeight; dy += 1) {
+          for (let dx = 0; dx < strokeWeight; dx += 1) {
+            const targetY = Math.min(glyphHeight - 1, y + dy);
+            const targetX = Math.min(logicalWidth - 1, cursor + x + dx);
+            logicalCells[targetY][targetX] = true;
+          }
+        }
+      }
+    }
+    cursor += glyphWidth + letterSpacing;
+  }
+
+  const margin = 2;
+  const rows = logicalCells.length * scale + margin * 2;
+  const cols = logicalWidth * scale + margin * 2;
+  const cells = Array.from({ length: rows }, () => Array(cols).fill(false));
+  const blocks3d = [];
+  const centerX = (cols - 1) / 2;
+  const centerZ = (rows - 1) / 2;
+  let blockCount = 0;
+
+  for (let y = 0; y < logicalCells.length; y += 1) {
+    for (let x = 0; x < logicalWidth; x += 1) {
+      if (!logicalCells[y][x]) {
+        continue;
+      }
+      for (let sy = 0; sy < scale; sy += 1) {
+        for (let sx = 0; sx < scale; sx += 1) {
+          const row = margin + y * scale + sy;
+          const col = margin + x * scale + sx;
+          cells[row][col] = createScriptCell();
+          blocks3d.push(createBlock3d(
+            col - centerX,
+            0.5,
+            row - centerZ,
+            "script",
+            1,
+            1,
+            1
+          ));
+          blockCount += 1;
+        }
+      }
+    }
+  }
+
+  return {
+    cells,
+    cols,
+    rows,
+    blocks3d,
+    blockCount,
+    text: normalizedText,
+    footprint: `${cols} × ${rows}`
+  };
 }
 
 export function generatePorchGrid(width, height, style, thickness) {

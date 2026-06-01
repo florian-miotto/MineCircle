@@ -6,7 +6,10 @@ import {
   generateCircleGrid,
   generateSphereLayers,
   generateSphereBlocks3d,
+  generateDomeLayers,
+  generateDomeBlocks3d,
   generatePorchGrid,
+  generateScriptGrid,
   generateStraightStairsGrid,
   generateSpiralStairsGrid,
   generateCurvedStairsGrid
@@ -25,7 +28,7 @@ const FUTURE_SERVICES = [
   },
   {
     title: "Export plans",
-    description: "Exporter en image, texte ou séquence de construction."
+    description: "Exporter en texte ou séquence de construction."
   }
 ];
 
@@ -59,8 +62,10 @@ const CURVED_DIRECTION_LABELS = Object.freeze({
 const TOOL_HINTS = Object.freeze({
   circle: "Astuce : le diamètre contrôle le contour extérieur de la forme.",
   sphere: "Astuce : utilisez le curseur pour parcourir les couches horizontales de la sphère.",
+  dome: "Astuce : étirez la hauteur du dôme pour obtenir une demi-sphère basse ou une forme allongée.",
   porch: "Astuce : la largeur du porche est ajustée automatiquement à une valeur impaire pour garder une symétrie propre.",
   stairs: "Astuce : les marches utilisent des blocs escaliers Minecraft et des supports en blocs pleins.",
+  script: "Astuce : le texte est converti en blocs, puis affiché en plan et en 3D.",
   structures: "Astuce : choisissez une structure pour afficher son titre, sa description et sa vue 3D."
 });
 
@@ -73,6 +78,12 @@ class MinecraftBuilderStudio {
     this.porchHeightInput = document.getElementById("porch-height-input");
     this.porchThicknessInput = document.getElementById("porch-thickness-input");
     this.porchStyleInput = document.getElementById("porch-style-input");
+    this.domeDiameterInput = document.getElementById("dome-diameter-input");
+    this.domeStretchInput = document.getElementById("dome-stretch-input");
+    this.domeStretchLabel = document.getElementById("dome-stretch-label");
+    this.domeLayerSlider = document.getElementById("dome-layer-input");
+    this.domeLayerLabel = document.getElementById("dome-layer-label");
+    this.domeSolidToggle = document.getElementById("dome-solid-toggle");
     this.structureList = document.getElementById("structure-list");
     this.stairsHeightInput = document.getElementById("stairs-height-input");
     this.stairsWidthInput = document.getElementById("stairs-width-input");
@@ -80,6 +91,11 @@ class MinecraftBuilderStudio {
     this.stairsTurnControl = document.getElementById("stairs-turn-control");
     this.stairsTurnLabel = document.getElementById("stairs-turn-label");
     this.stairsTurnInput = document.getElementById("stairs-turn-input");
+    this.scriptTextInput = document.getElementById("script-text-input");
+    this.scriptSizeInput = document.getElementById("script-size-input");
+    this.scriptWeightInput = document.getElementById("script-weight-input");
+    this.scriptWeightLabel = document.getElementById("script-weight-label");
+    this.scriptSpacingInput = document.getElementById("script-spacing-input");
     this.toolHint = document.getElementById("tool-hint");
     this.toolPanels = Array.from(document.querySelectorAll("[data-tool-target]"));
     this.canvasPanel = document.querySelector(".canvas-panel");
@@ -109,10 +125,14 @@ class MinecraftBuilderStudio {
     this.currentCells = null;
     this.sphereLayers = null;
     this.sphereStats = null;
+    this.domeLayers = null;
+    this.domeStats = null;
     this.currentSphereLayerIndex = 0;
+    this.currentDomeLayerIndex = 0;
     this.structureCatalog = [...DEFAULT_STRUCTURE_CATALOG];
     this.selectedStructureId = this.structureCatalog[0].id;
     this.showSupports3d = true;
+    this.domeSolid = Boolean(this.domeSolidToggle && this.domeSolidToggle.checked);
 
     // Initialiser le moteur de rendu 3D
     const domElements = {
@@ -180,6 +200,28 @@ class MinecraftBuilderStudio {
       this.renderSphereLayer();
     });
 
+    this.domeStretchInput.addEventListener("input", () => {
+      this.updateDomeStretchLabel();
+      if (this.toolSelect.value === "dome") {
+        this.drawCurrentTool();
+      }
+    });
+
+    this.domeLayerSlider.addEventListener("input", () => {
+      if (!this.domeLayers) {
+        return;
+      }
+      this.currentDomeLayerIndex = Number(this.domeLayerSlider.value) - 1;
+      this.renderDomeLayer();
+    });
+
+    this.scriptWeightInput.addEventListener("input", () => {
+      this.updateScriptWeightLabel();
+      if (this.toolSelect.value === "script") {
+        this.drawCurrentTool();
+      }
+    });
+
     this.toggleSupports3dBtn.addEventListener("click", () => {
       this.showSupports3d = !this.showSupports3d;
       this.toggleSupports3dBtn.textContent = this.showSupports3d ? "Masquer les supports (3D)" : "Afficher les supports (3D)";
@@ -190,6 +232,15 @@ class MinecraftBuilderStudio {
       this.sphereSolidToggle.addEventListener('change', () => {
         this.sphereSolid = Boolean(this.sphereSolidToggle.checked);
         if (this.toolSelect && this.toolSelect.value === 'sphere') {
+          this.drawCurrentTool();
+        }
+      });
+    }
+
+    if (this.domeSolidToggle) {
+      this.domeSolidToggle.addEventListener('change', () => {
+        this.domeSolid = Boolean(this.domeSolidToggle.checked);
+        if (this.toolSelect && this.toolSelect.value === 'dome') {
           this.drawCurrentTool();
         }
       });
@@ -210,6 +261,14 @@ class MinecraftBuilderStudio {
 
   normalizeInteger(rawValue, min, max) {
     const parsed = Number.parseInt(rawValue, 10);
+    if (!Number.isFinite(parsed)) {
+      return null;
+    }
+    return Math.max(min, Math.min(max, parsed));
+  }
+
+  normalizeNumber(rawValue, min, max) {
+    const parsed = Number.parseFloat(rawValue);
     if (!Number.isFinite(parsed)) {
       return null;
     }
@@ -242,6 +301,8 @@ class MinecraftBuilderStudio {
       panel.classList.toggle("hidden", !isCurrentPanel);
     }
     this.toolHint.textContent = TOOL_HINTS[selectedTool] || "";
+    this.updateDomeStretchLabel();
+    this.updateScriptWeightLabel();
     this.syncStairTurnControl();
   }
 
@@ -251,6 +312,27 @@ class MinecraftBuilderStudio {
     this.stairsTurnControl.classList.toggle("hidden", !usesDirection);
     this.stairsTurnInput.disabled = !usesDirection;
     this.stairsTurnLabel.textContent = type === "curved" ? "Sens de l'arrondi" : "Sens du colimaçon";
+  }
+
+  updateDomeStretchLabel() {
+    if (!this.domeStretchInput || !this.domeStretchLabel) {
+      return;
+    }
+    const stretch = this.normalizeNumber(this.domeStretchInput.value, 0.5, 3) || 1;
+    this.domeStretchLabel.textContent = `Étirement ×${stretch.toFixed(1)}`;
+  }
+
+  updateScriptWeightLabel() {
+    if (!this.scriptWeightInput || !this.scriptWeightLabel) {
+      return;
+    }
+    const weight = this.normalizeInteger(this.scriptWeightInput.value, 1, 3) || 1;
+    const labels = {
+      1: "Trait fin",
+      2: "Trait moyen",
+      3: "Trait épais"
+    };
+    this.scriptWeightLabel.textContent = labels[weight] || labels[1];
   }
 
   renderStructureCatalog() {
@@ -489,6 +571,8 @@ class MinecraftBuilderStudio {
     this.circleInput.value = String(diameter);
     const sphere = generateSphereLayers(diameter, this.sphereSolid);
     this.sphereLayers = sphere.layers;
+    this.domeLayers = null;
+    this.domeStats = null;
     this.currentSphereLayerIndex = Math.floor(sphere.layers.length / 2);
     this.sphereLayerSlider.max = String(sphere.layers.length);
     this.sphereLayerSlider.value = String(this.currentSphereLayerIndex + 1);
@@ -510,6 +594,44 @@ class MinecraftBuilderStudio {
     };
   }
 
+  buildDomeResult() {
+    const diameter = this.normalizeInteger(this.domeDiameterInput.value, 3, 96);
+    const stretch = this.normalizeNumber(this.domeStretchInput.value, 0.5, 3);
+    if (!diameter || !stretch) {
+      this.showMessage("Paramètres de dôme invalides. Vérifie le diamètre et l'étirement.");
+      return null;
+    }
+
+    this.domeDiameterInput.value = String(diameter);
+    this.domeStretchInput.value = String(stretch.toFixed(1));
+    this.updateDomeStretchLabel();
+
+    const dome = generateDomeLayers(diameter, stretch, this.domeSolid);
+    this.domeLayers = dome.layers;
+    this.sphereLayers = null;
+    this.sphereStats = null;
+    this.currentDomeLayerIndex = 0;
+    this.domeLayerSlider.max = String(dome.layers.length);
+    this.domeLayerSlider.value = "1";
+    this.domeLayerLabel.textContent = `Couche 1 / ${dome.layers.length}`;
+    this.domeStats = {
+      diameter,
+      stretch,
+      layers: dome.layers.length,
+      blockCount: dome.blockCount,
+      cols: dome.cols,
+      rows: dome.rows
+    };
+
+    return {
+      cells: dome.layers[this.currentDomeLayerIndex],
+      cols: dome.cols,
+      rows: dome.rows,
+      blocks3d: generateDomeBlocks3d(dome.layers),
+      stats: this.getDomeStatsRows()
+    };
+  }
+
   getSphereStatsRows() {
     if (!this.sphereStats) {
       return [];
@@ -523,6 +645,62 @@ class MinecraftBuilderStudio {
       ["Blocs estimés", `~${this.sphereStats.blockCount}`],
       ["Grille affichée", `${this.sphereStats.cols} × ${this.sphereStats.rows}`]
     ];
+  }
+
+  getDomeStatsRows() {
+    if (!this.domeStats) {
+      return [];
+    }
+
+    return [
+      ["Outil", "Dôme"],
+      ["Diamètre au sol", `${this.domeStats.diameter} blocs`],
+      ["Étirement", `×${this.domeStats.stretch.toFixed(1)}`],
+      ["Hauteur", `${this.domeStats.layers} couches`],
+      ["Couche actuelle", `${this.currentDomeLayerIndex + 1}`],
+      ["Blocs estimés", `~${this.domeStats.blockCount}`],
+      ["Grille affichée", `${this.domeStats.cols} × ${this.domeStats.rows}`]
+    ];
+  }
+
+  buildScriptResult() {
+    const text = (this.scriptTextInput.value || "").trim();
+    const size = this.normalizeInteger(this.scriptSizeInput.value, 1, 8);
+    const weight = this.normalizeInteger(this.scriptWeightInput.value, 1, 3);
+    const spacing = this.normalizeInteger(this.scriptSpacingInput.value, 0, 8);
+
+    if (!text || !size || !weight || spacing === null) {
+      this.showMessage("Paramètres de script invalides. Saisis un texte, une taille, une finesse et un espacement.");
+      return null;
+    }
+
+    this.scriptSizeInput.value = String(size);
+    this.scriptWeightInput.value = String(weight);
+    this.scriptSpacingInput.value = String(spacing);
+    this.updateScriptWeightLabel();
+
+    const script = generateScriptGrid(text, size, weight, spacing);
+    this.scriptTextInput.value = script.text;
+    this.sphereLayers = null;
+    this.sphereStats = null;
+    this.domeLayers = null;
+    this.domeStats = null;
+
+    return {
+      cells: script.cells,
+      cols: script.cols,
+      rows: script.rows,
+      blocks3d: script.blocks3d,
+      stats: [
+        ["Outil", "Script"],
+        ["Texte", script.text],
+        ["Taille", `${size}`],
+        ["Finesse", `${weight}`],
+        ["Espacement", `${spacing}`],
+        ["Blocs estimés", `~${script.blockCount}`],
+        ["Grille affichée", script.footprint]
+      ]
+    };
   }
 
   buildStructuresResult() {
@@ -552,10 +730,14 @@ class MinecraftBuilderStudio {
       result = this.buildPorchResult();
     } else if (selectedTool === "sphere") {
       result = this.buildSphereResult();
+    } else if (selectedTool === "dome") {
+      result = this.buildDomeResult();
     } else if (selectedTool === "structures") {
       result = this.buildStructuresResult();
     } else if (selectedTool === "stairs") {
       result = this.buildStairsResult();
+    } else if (selectedTool === "script") {
+      result = this.buildScriptResult();
     } else {
       result = this.buildCircleResult();
     }
@@ -613,20 +795,26 @@ class MinecraftBuilderStudio {
     const selectedTool = this.toolSelect.value;
     const isStairs = selectedTool === "stairs" && result.sideCells;
     const isSphere = selectedTool === "sphere" && result.blocks3d;
+    const isDome = selectedTool === "dome" && result.blocks3d;
+    const isScript = selectedTool === "script" && result.blocks3d;
     const isStructure = selectedTool === "structures" && result.modelUrl;
-    const showDetails = isStairs || isSphere || isStructure;
+    const showDetails = isStairs || isSphere || isDome || isScript || isStructure;
 
     this.stairsDetails.classList.toggle("hidden", !showDetails);
-    this.stairsDetails.classList.toggle("sphere-details", isSphere);
+    this.stairsDetails.classList.toggle("sphere-details", isSphere || isDome || isScript);
     this.canvasPanel.classList.toggle("stairs-layout", isStairs);
-    this.canvasPanel.classList.toggle("sphere-layout", isSphere);
+    this.canvasPanel.classList.toggle("sphere-layout", isSphere || isDome || isScript);
     this.canvasPanel.classList.toggle("structure-layout", isStructure);
     this.sideDetailBlock.classList.toggle("hidden", !isStairs);
     this.threeViewTitle.textContent = isStructure
       ? "Vue 3D de la structure"
       : isSphere
         ? "Vue 3D de la sphère"
-        : "Vue 3D";
+        : isDome
+          ? "Vue 3D du dôme"
+          : isScript
+            ? "Vue 3D du script"
+            : "Vue 3D";
 
     if (!showDetails) {
       this.sideGrid.replaceChildren();
@@ -663,10 +851,28 @@ class MinecraftBuilderStudio {
     this.updateStats(this.getSphereStatsRows());
   }
 
+  renderDomeLayer() {
+    if (!this.domeLayers) {
+      return;
+    }
+    const layer = this.domeLayers[this.currentDomeLayerIndex];
+    this.currentCells = layer;
+    this.renderGrid(layer, layer[0].length);
+    this.renderAscii(layer);
+    this.updateDomeLayerLabel();
+    this.updateStats(this.getDomeStatsRows());
+  }
+
   updateSphereLayerLabel() {
     const layerNumber = this.currentSphereLayerIndex + 1;
     const total = this.sphereLayers ? this.sphereLayers.length : 1;
     this.sphereLayerLabel.textContent = `Couche ${layerNumber} / ${total}`;
+  }
+
+  updateDomeLayerLabel() {
+    const layerNumber = this.currentDomeLayerIndex + 1;
+    const total = this.domeLayers ? this.domeLayers.length : 1;
+    this.domeLayerLabel.textContent = `Couche ${layerNumber} / ${total}`;
   }
 
   renderAscii(cells) {
@@ -697,6 +903,8 @@ class MinecraftBuilderStudio {
     }
     this.sphereLayers = null;
     this.sphereStats = null;
+    this.domeLayers = null;
+    this.domeStats = null;
   }
 
   clearPreview() {
@@ -712,7 +920,10 @@ class MinecraftBuilderStudio {
     this.currentCells = null;
     this.sphereLayers = null;
     this.sphereStats = null;
+    this.domeLayers = null;
+    this.domeStats = null;
     this.currentSphereLayerIndex = 0;
+    this.currentDomeLayerIndex = 0;
   }
 
   exportAsPng() {
@@ -744,6 +955,12 @@ class MinecraftBuilderStudio {
         }
         if (getCellKind(cell) === 'support') {
           ctx.fillStyle = '#38bdf8';
+        }
+        if (getCellKind(cell) === 'dome') {
+          ctx.fillStyle = '#0ea5e9';
+        }
+        if (getCellKind(cell) === 'script') {
+          ctx.fillStyle = '#a855f7';
         }
         ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
         const label = getCellLabel(cell);

@@ -63,6 +63,8 @@ export class MinecraftThreeRenderer {
       minCameraDistance: 5,
       maxCameraDistance: 50,
       targetY: 0,
+      minPitch: -0.9,
+      maxPitch: 0.75,
       animationFrame: null,
       grid: null,
       structureLoadToken: null
@@ -94,6 +96,10 @@ export class MinecraftThreeRenderer {
       this.threeState.lastY = event.clientY;
 
       group.rotation.y += deltaX * 0.008;
+      group.rotation.x = Math.max(
+        this.threeState.minPitch,
+        Math.min(this.threeState.maxPitch, group.rotation.x + deltaY * 0.006)
+      );
     });
 
     window.addEventListener("mouseup", () => {
@@ -257,6 +263,7 @@ export class MinecraftThreeRenderer {
     }
 
     group.add(stairGroup);
+    return stairGroup;
   }
 
   getBlockEdgeColor(kind) {
@@ -271,6 +278,12 @@ export class MinecraftThreeRenderer {
     }
     if (kind === "stair") {
       return 0x5f3510;
+    }
+    if (kind === "dome") {
+      return 0x075985;
+    }
+    if (kind === "script") {
+      return 0x4c1d95;
     }
     if (kind === "slab") {
       return 0x78350f;
@@ -372,9 +385,13 @@ export class MinecraftThreeRenderer {
       scene.remove(this.threeState.grid);
     }
 
-    const showEdges = (this.selectedTool === 'sphere') ? true : centeredBlocks.length <= 900;
+    const showEdges = (this.selectedTool === 'sphere' || this.selectedTool === 'dome' || this.selectedTool === 'script')
+      ? true
+      : centeredBlocks.length <= 900;
     const blockMeshes = [];
-    const instancedThreshold = (this.selectedTool === 'sphere') ? Infinity : 1200;
+    const instancedThreshold = (this.selectedTool === 'sphere' || this.selectedTool === 'dome' || this.selectedTool === 'script')
+      ? Infinity
+      : 1200;
 
     if (centeredBlocks.length > instancedThreshold) {
       this.addInstancedMinecraftBoxes(group, centeredBlocks);
@@ -407,15 +424,16 @@ export class MinecraftThreeRenderer {
     }
 
     renderer.render(scene, camera);
-    this.status.textContent = "Glissez pour tourner. Utilisez la molette pour zoomer.";
+    this.status.textContent = "Glissez horizontalement et verticalement pour tourner. Utilisez la molette pour zoomer.";
   }
 
   createBlockMesh(group, block, showEdges) {
     const THREE = window.THREE;
     
     if (block.kind === "stair") {
-      this.addMinecraftStairBlock(group, block, showEdges);
-      return null;
+      const stairGroup = this.addMinecraftStairBlock(group, block, showEdges);
+      stairGroup.scale.set(0, 0, 0);
+      return stairGroup;
     }
 
     const geomKey = `${block.width}|${block.height}|${block.depth}`;
@@ -647,7 +665,9 @@ export class MinecraftThreeRenderer {
       fence: ["#a16207", "#854d0e", "#ca8a04", "#713f12"],
       stair: ["#d59a3a", "#9a5b16", "#f3b65d", "#6b3510"],
       slab: ["#c58a2b", "#8f5518", "#e7ad55", "#6f3a12"],
-      platform: ["#9f6b2f", "#704214", "#c18a45", "#4a2a0d"]
+      platform: ["#9f6b2f", "#704214", "#c18a45", "#4a2a0d"],
+      dome: ["#38bdf8", "#0284c7", "#bae6fd", "#0c4a6e"],
+      script: ["#c084fc", "#7e22ce", "#f0abfc", "#4c1d95"]
     };
 
     if (kind === 'stone' || kind === 'sphere') {
@@ -844,7 +864,7 @@ export class MinecraftThreeRenderer {
       this.threeState.cameraDistance = Math.max(8, maxRadius * 2.4, heightSpan * 1.4);
       this.positionThreeCamera();
       renderer.render(scene, camera);
-      this.status.textContent = `${structure.title} chargé depuis ${structure.modelUrl}. Glissez pour tourner. Utilisez la molette pour zoomer.`;
+      this.status.textContent = `${structure.title} chargé depuis ${structure.modelUrl}. Glissez horizontalement et verticalement pour tourner. Utilisez la molette pour zoomer.`;
     } catch (error) {
       console.error(error);
       const detail = error && error.message ? error.message : "erreur inconnue";
