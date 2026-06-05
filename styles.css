@@ -8,6 +8,7 @@
   --accent: #22c55e;
   --accent-hover: #16a34a;
   --empty: #0b1020;
+  --select-chevron: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2322c55e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
 }
 
 * {
@@ -34,6 +35,14 @@ body {
   border: 1px solid var(--panel-border);
   border-radius: 12px;
   padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.hero-copy {
+  min-width: 0;
 }
 
 .hero h1 {
@@ -44,6 +53,56 @@ body {
 .hero p {
   margin: 0.5rem 0 0;
   color: var(--muted);
+}
+
+.language-switcher {
+  display: inline-flex;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.55);
+}
+
+.language-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 3.8rem;
+  padding: 0.35rem 0.6rem;
+  color: var(--muted);
+  background: transparent;
+  border-radius: 999px;
+}
+
+.language-flag {
+  flex: 0 0 auto;
+  width: 1.25rem;
+  height: 0.85rem;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(226, 232, 240, 0.38);
+  overflow: hidden;
+}
+
+.flag-fr {
+  background: linear-gradient(90deg, #1d4ed8 0 33.33%, #ffffff 33.33% 66.66%, #dc2626 66.66% 100%);
+}
+
+.flag-gb {
+  background:
+    linear-gradient(33deg, transparent 0 41%, #ffffff 41% 47%, #c8102e 47% 53%, #ffffff 53% 59%, transparent 59%),
+    linear-gradient(-33deg, transparent 0 41%, #ffffff 41% 47%, #c8102e 47% 53%, #ffffff 53% 59%, transparent 59%),
+    linear-gradient(90deg, transparent 0 42%, #ffffff 42% 58%, transparent 58%),
+    linear-gradient(0deg, transparent 0 36%, #ffffff 36% 64%, transparent 64%),
+    linear-gradient(90deg, transparent 0 45%, #c8102e 45% 55%, transparent 55%),
+    linear-gradient(0deg, transparent 0 42%, #c8102e 42% 58%, transparent 58%),
+    #012169;
+}
+
+.language-button:hover,
+.language-button[aria-pressed="true"] {
+  color: #052e16;
+  background: var(--accent);
 }
 
 .workspace {
@@ -88,7 +147,7 @@ body {
   border-radius: 8px;
   cursor: pointer;
   appearance: none;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2322c55e' stroke-width='2'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-image: var(--select-chevron);
   background-repeat: no-repeat;
   background-position: right 0.7rem center;
   background-size: 1.2em 1.2em;
@@ -150,18 +209,16 @@ select {
   padding: 0.55rem 0.6rem;
 }
 
-/* Styles pour rendre les menus (select) interactifs et évidents */
 .menu-select {
-  appearance: none; /* Supprime le style par défaut du navigateur */
+  appearance: none;
   cursor: pointer;
   font-weight: 600;
   border: 2px solid var(--panel-border);
-  /* Flèche de menu personnalisée via une image de fond */
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2322c55e' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-image: var(--select-chevron);
   background-repeat: no-repeat;
   background-position: right 0.7rem center;
   background-size: 1.1em 1.1em;
-  padding-right: 2.5rem; /* Espace pour la flèche */
+  padding-right: 2.5rem;
   transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
 }
 
@@ -730,6 +787,11 @@ button:hover {
   .panel {
     border-radius: 8px;
     padding: 0.75rem;
+  }
+
+  .hero {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .tool-selector-section {

@@ -1,3 +1,16 @@
+const BLOCK_EDGE_COLORS = Object.freeze({
+  core: 0x1f2937,
+  support: 0x083344,
+  sphere: 0x14532d,
+  stair: 0xffffff,
+  slab: 0xffffff,
+  platform: 0xffffff,
+  dome: 0xffffff,
+  script: 0x4c1d95
+});
+
+const STAIR_SURFACE_KINDS = new Set(["stair", "slab", "platform"]);
+
 export class MinecraftThreeRenderer {
   constructor(domElements) {
     this.container = domElements.container;
@@ -8,6 +21,7 @@ export class MinecraftThreeRenderer {
     this.nextButton = domElements.nextButton;
     this.stepCounterElement = domElements.stepCounter;
     this.stairsDetails = domElements.stairsDetails;
+    this.t = domElements.translate || ((key) => key);
 
     this.threeState = null;
     this.buildSteps = [];
@@ -23,7 +37,7 @@ export class MinecraftThreeRenderer {
 
     const THREE = window.THREE;
     if (!THREE) {
-      this.status.textContent = "Vue 3D indisponible : Three.js n'a pas pu être chargé.";
+      this.status.textContent = this.t("renderer.missingThree");
       return false;
     }
 
@@ -181,18 +195,24 @@ export class MinecraftThreeRenderer {
     }
 
     const edgeColor = this.getBlockEdgeColor(block.kind);
-    const edgeOpacity = block.kind === 'sphere' ? 0.72 : 0.30;
-    const edgeMaterial = new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: edgeOpacity });
+    const edgeOpacity = this.getBlockEdgeOpacity(block.kind);
+    const edgeMaterial = new THREE.LineBasicMaterial({
+      color: edgeColor,
+      transparent: true,
+      opacity: edgeOpacity,
+      linewidth: this.getBlockEdgeWidth(block.kind)
+    });
     const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), edgeMaterial);
     edges.position.copy(mesh.position);
     edges.rotation.copy(mesh.rotation);
     group.add(edges);
-    if (block.kind === 'sphere' || block.kind === 'stone') {
-      const outlineMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
+    if (this.hasStrongOutline(block.kind)) {
+      const outlineScale = this.getStrongOutlineScale(block.kind);
+      const outlineMat = new THREE.MeshBasicMaterial({ color: this.getStrongOutlineColor(block.kind), side: THREE.BackSide });
       const outline = new THREE.Mesh(geometry.clone(), outlineMat);
       outline.position.copy(mesh.position);
       outline.rotation.copy(mesh.rotation);
-      outline.scale.set(1.03, 1.03, 1.03);
+      outline.scale.set(outlineScale, outlineScale, outlineScale);
       group.add(outline);
     }
   }
@@ -201,97 +221,311 @@ export class MinecraftThreeRenderer {
     const THREE = window.THREE;
     const stairGroup = new THREE.Group();
     const material = this.getThreeMaterial("stair");
-
-    const lowerKey = `${block.width}|${block.height / 2}|${block.depth}`;
-    const upperKey = `${block.width}|${block.height / 2}|${block.depth / 2}`;
-
-    let lowerGeom = this.threeState.geometries.get(lowerKey);
-    if (!lowerGeom) {
-      lowerGeom = new THREE.BoxGeometry(block.width, block.height / 2, block.depth);
-      this.threeState.geometries.set(lowerKey, lowerGeom);
+    const stairShape = block.stairShape || "straight";
+    const geometryKey = `stair|${block.width}|${block.height}|${block.depth}|${stairShape}`;
+    let geometry = this.threeState.geometries.get(geometryKey);
+    if (!geometry) {
+      geometry = this.createStairGeometry(block.width, block.height, block.depth, stairShape);
+      this.threeState.geometries.set(geometryKey, geometry);
     }
-
-    let upperGeom = this.threeState.geometries.get(upperKey);
-    if (!upperGeom) {
-      upperGeom = new THREE.BoxGeometry(block.width, block.height / 2, block.depth / 2);
-      this.threeState.geometries.set(upperKey, upperGeom);
-    }
-
-    const pieces = [
-      {
-        geometry: lowerGeom,
-        y: -block.height / 4,
-        z: 0,
-        geomKey: lowerKey
-      },
-      {
-        geometry: upperGeom,
-        y: block.height / 4,
-        z: block.depth / 4,
-        geomKey: upperKey
-      }
-    ];
 
     stairGroup.position.set(block.x, block.y, block.z);
     stairGroup.rotation.y = block.rotationY || 0;
 
-    for (const piece of pieces) {
-      const mesh = new THREE.Mesh(piece.geometry, material);
-      mesh.position.set(0, piece.y, piece.z);
-      mesh.castShadow = false;
-      mesh.receiveShadow = true;
-      stairGroup.add(mesh);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = false;
+    mesh.receiveShadow = true;
+    stairGroup.add(mesh);
 
-      if (showEdges) {
-        let edgesGeometry = this.threeState.edgeGeometries.get(piece.geomKey);
-        if (!edgesGeometry) {
-          edgesGeometry = new THREE.EdgesGeometry(piece.geometry);
-          this.threeState.edgeGeometries.set(piece.geomKey, edgesGeometry);
-        }
-
-        const edges = new THREE.LineSegments(
-          edgesGeometry,
-          new THREE.LineBasicMaterial({
-            color: this.getBlockEdgeColor("stair"),
-            transparent: true,
-            opacity: 0.34
-          })
-        );
-        edges.position.copy(mesh.position);
-        stairGroup.add(edges);
+    if (showEdges) {
+      const outlineKey = `stair-outline|${block.width}|${block.height}|${block.depth}|${stairShape}`;
+      let outlineGeometry = this.threeState.edgeGeometries.get(outlineKey);
+      if (!outlineGeometry) {
+        outlineGeometry = this.createStairOutlineGeometry(block.width, block.height, block.depth, stairShape);
+        this.threeState.edgeGeometries.set(outlineKey, outlineGeometry);
       }
+
+      const edges = new THREE.LineSegments(
+        outlineGeometry,
+        new THREE.LineBasicMaterial({
+          color: this.getBlockEdgeColor("stair"),
+          transparent: true,
+          opacity: this.getBlockEdgeOpacity("stair"),
+          linewidth: this.getBlockEdgeWidth("stair")
+        })
+      );
+      stairGroup.add(edges);
     }
 
     group.add(stairGroup);
     return stairGroup;
   }
 
+  applyStairCornerShapes(blocks) {
+    const stairBlocks = blocks.filter((block) => block.kind === "stair");
+    if (stairBlocks.length === 0) {
+      return blocks;
+    }
+
+    const stairMap = new Map();
+    const stairColumnMap = new Map();
+    for (const block of stairBlocks) {
+      const level = block.step ?? Math.round(block.y * 2) / 2;
+      stairMap.set(this.getStairAdjacencyKey(block.x, block.z, level), block);
+      const columnKey = this.getStairColumnKey(block.x, block.z);
+      if (!stairColumnMap.has(columnKey)) {
+        stairColumnMap.set(columnKey, []);
+      }
+      stairColumnMap.get(columnKey).push({ block, level });
+    }
+
+    return blocks.map((block) => {
+      if (block.kind !== "stair") {
+        return block;
+      }
+      const shape = this.getStairCornerShape(block, stairMap, stairColumnMap);
+      return shape === "straight" ? block : { ...block, stairShape: shape };
+    });
+  }
+
+  getStairCornerShape(block, stairMap, stairColumnMap) {
+    const rotationY = block.rotationY || 0;
+    const level = block.step ?? Math.round(block.y * 2) / 2;
+    const forward = this.getStairForwardVector(rotationY);
+    const right = this.getStairRightVector(rotationY);
+    const sides = [
+      { name: "left", x: -right.x, z: -right.z },
+      { name: "right", x: right.x, z: right.z }
+    ];
+
+    for (const side of sides) {
+      const neighborX = block.x + side.x;
+      const neighborZ = block.z + side.z;
+      const neighbor = stairMap.get(this.getStairAdjacencyKey(neighborX, neighborZ, level))
+        || this.getNearbyStairInColumn(neighborX, neighborZ, level, stairColumnMap);
+      if (!neighbor) {
+        continue;
+      }
+
+      const neighborForward = this.getStairForwardVector(neighbor.rotationY || 0);
+      if (Math.abs(forward.x * neighborForward.x + forward.z * neighborForward.z) > 0.1) {
+        continue;
+      }
+
+      const neighborToBlock = { x: -side.x, z: -side.z };
+      if (this.areGridVectorsEqual(neighborToBlock, { x: -neighborForward.x, z: -neighborForward.z })) {
+        return `inner-${side.name}`;
+      }
+      if (this.areGridVectorsEqual(neighborToBlock, neighborForward)) {
+        return `outer-${side.name}`;
+      }
+    }
+
+    return "straight";
+  }
+
+  getNearbyStairInColumn(x, z, level, stairColumnMap) {
+    const candidates = stairColumnMap.get(this.getStairColumnKey(x, z)) || [];
+    let best = null;
+    for (const candidate of candidates) {
+      const distance = Math.abs(candidate.level - level);
+      if (distance > 1) {
+        continue;
+      }
+      if (!best || distance < best.distance) {
+        best = { ...candidate, distance };
+      }
+    }
+    return best?.block || null;
+  }
+
+  getStairAdjacencyKey(x, z, level) {
+    return `${Math.round(x)},${Math.round(z)},${level}`;
+  }
+
+  getStairColumnKey(x, z) {
+    return `${Math.round(x)},${Math.round(z)}`;
+  }
+
+  getStairForwardVector(rotationY) {
+    return {
+      x: Math.round(Math.sin(rotationY)),
+      z: Math.round(Math.cos(rotationY))
+    };
+  }
+
+  getStairRightVector(rotationY) {
+    return {
+      x: Math.round(Math.cos(rotationY)),
+      z: Math.round(-Math.sin(rotationY))
+    };
+  }
+
+  areGridVectorsEqual(a, b) {
+    return Math.round(a.x) === Math.round(b.x) && Math.round(a.z) === Math.round(b.z);
+  }
+
+  createStairGeometry(width, height, depth, shape = "straight") {
+    const THREE = window.THREE;
+    const { xs, zs, yMin, heights } = this.getStairHeightGrid(width, height, depth, shape);
+    const vertices = [];
+    const addQuad = (points) => {
+      for (const point of points) {
+        vertices.push(point[0], point[1], point[2]);
+      }
+    };
+
+    addQuad([
+      [xs[0], yMin, zs[0]], [xs[2], yMin, zs[0]], [xs[2], yMin, zs[2]],
+      [xs[0], yMin, zs[0]], [xs[2], yMin, zs[2]], [xs[0], yMin, zs[2]]
+    ]);
+
+    for (let ix = 0; ix < 2; ix += 1) {
+      for (let iz = 0; iz < 2; iz += 1) {
+        const x0 = xs[ix];
+        const x1 = xs[ix + 1];
+        const z0 = zs[iz];
+        const z1 = zs[iz + 1];
+        const y = heights[ix][iz];
+
+        addQuad([
+          [x0, y, z0], [x0, y, z1], [x1, y, z1],
+          [x0, y, z0], [x1, y, z1], [x1, y, z0]
+        ]);
+
+        if (ix === 0) {
+          this.addVerticalStairFace(vertices, x0, z0, x0, z1, yMin, y);
+        } else if (heights[ix - 1][iz] !== y) {
+          this.addVerticalStairFace(vertices, x0, z0, x0, z1, Math.min(y, heights[ix - 1][iz]), Math.max(y, heights[ix - 1][iz]));
+        }
+        if (ix === 1) {
+          this.addVerticalStairFace(vertices, x1, z1, x1, z0, yMin, y);
+        }
+        if (iz === 0) {
+          this.addVerticalStairFace(vertices, x1, z0, x0, z0, yMin, y);
+        } else if (heights[ix][iz - 1] !== y) {
+          this.addVerticalStairFace(vertices, x1, z0, x0, z0, Math.min(y, heights[ix][iz - 1]), Math.max(y, heights[ix][iz - 1]));
+        }
+        if (iz === 1) {
+          this.addVerticalStairFace(vertices, x0, z1, x1, z1, yMin, y);
+        }
+      }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.computeVertexNormals();
+    return geometry;
+  }
+
+  addVerticalStairFace(vertices, x0, z0, x1, z1, y0, y1) {
+    vertices.push(
+      x0, y0, z0, x1, y0, z1, x1, y1, z1,
+      x0, y0, z0, x1, y1, z1, x0, y1, z0
+    );
+  }
+
+  createStairOutlineGeometry(width, height, depth, shape = "straight") {
+    const THREE = window.THREE;
+    const { xs, zs, yMin, heights } = this.getStairHeightGrid(width, height, depth, shape);
+    const vertices = [];
+    const addSegment = (x0, y0, z0, x1, y1, z1) => {
+      vertices.push(x0, y0, z0, x1, y1, z1);
+    };
+
+    addSegment(xs[0], yMin, zs[0], xs[2], yMin, zs[0]);
+    addSegment(xs[2], yMin, zs[0], xs[2], yMin, zs[2]);
+    addSegment(xs[2], yMin, zs[2], xs[0], yMin, zs[2]);
+    addSegment(xs[0], yMin, zs[2], xs[0], yMin, zs[0]);
+
+    for (let ix = 0; ix < 2; ix += 1) {
+      for (let iz = 0; iz < 2; iz += 1) {
+        const x0 = xs[ix];
+        const x1 = xs[ix + 1];
+        const z0 = zs[iz];
+        const z1 = zs[iz + 1];
+        const y = heights[ix][iz];
+
+        if (ix === 0 || heights[ix - 1][iz] !== y) {
+          addSegment(x0, y, z0, x0, y, z1);
+        }
+        if (ix === 1 || heights[ix + 1][iz] !== y) {
+          addSegment(x1, y, z0, x1, y, z1);
+        }
+        if (iz === 0 || heights[ix][iz - 1] !== y) {
+          addSegment(x0, y, z0, x1, y, z0);
+        }
+        if (iz === 1 || heights[ix][iz + 1] !== y) {
+          addSegment(x0, y, z1, x1, y, z1);
+        }
+      }
+    }
+
+    for (const x of [xs[0], xs[2]]) {
+      for (const z of [zs[0], zs[2]]) {
+        const ix = x === xs[0] ? 0 : 1;
+        const iz = z === zs[0] ? 0 : 1;
+        addSegment(x, yMin, z, x, heights[ix][iz], z);
+      }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    return geometry;
+  }
+
+  getStairHeightGrid(width, height, depth, shape = "straight") {
+    const half = 0;
+    const full = height / 2;
+    const heights = [
+      [half, full],
+      [half, full]
+    ];
+
+    if (shape === "inner-left") {
+      heights[0][0] = full;
+    } else if (shape === "inner-right") {
+      heights[1][0] = full;
+    } else if (shape === "outer-left") {
+      heights[1][1] = half;
+    } else if (shape === "outer-right") {
+      heights[0][1] = half;
+    }
+
+    return {
+      xs: [-width / 2, 0, width / 2],
+      zs: [-depth / 2, 0, depth / 2],
+      yMin: -height / 2,
+      heights
+    };
+  }
+
   getBlockEdgeColor(kind) {
-    if (kind === "core") {
-      return 0x1f2937;
-    }
-    if (kind === "support") {
-      return 0x083344;
-    }
-    if (kind === "sphere") {
-      return 0x14532d;
-    }
-    if (kind === "stair") {
-      return 0x5f3510;
-    }
-    if (kind === "dome") {
-      return 0x075985;
-    }
-    if (kind === "script") {
-      return 0x4c1d95;
-    }
-    if (kind === "slab") {
-      return 0x78350f;
-    }
-    if (kind === "platform") {
-      return 0x3f2a12;
-    }
-    return 0x3f2a12;
+    return BLOCK_EDGE_COLORS[kind] ?? 0x3f2a12;
+  }
+
+  getBlockEdgeOpacity(kind) {
+    return kind === 'dome' || this.isStairSurfaceKind(kind) ? 0.95 : kind === 'sphere' ? 0.72 : 0.30;
+  }
+
+  getBlockEdgeWidth(kind) {
+    return kind === 'dome' || this.isStairSurfaceKind(kind) ? 2.5 : 1;
+  }
+
+  hasStrongOutline(kind) {
+    return kind === 'sphere' || kind === 'dome' || this.isStairSurfaceKind(kind) || kind === 'stone';
+  }
+
+  getStrongOutlineColor(kind) {
+    return kind === 'dome' || this.isStairSurfaceKind(kind) ? 0xffffff : 0x000000;
+  }
+
+  getStrongOutlineScale(kind) {
+    return kind === 'dome' || this.isStairSurfaceKind(kind) ? 1.08 : 1.03;
+  }
+
+  isStairSurfaceKind(kind) {
+    return STAIR_SURFACE_KINDS.has(kind);
   }
 
   buildConstructionSteps(blocks) {
@@ -333,7 +567,10 @@ export class MinecraftThreeRenderer {
     this.prevButton.disabled = isFirstStep;
     this.nextButton.disabled = isLastStep;
     
-    this.stepCounterElement.textContent = "Étape " + (this.currentBuildStep + 1) + " / " + this.buildSteps.length;
+    this.stepCounterElement.textContent = this.t("renderer.step", {
+      current: this.currentBuildStep + 1,
+      total: this.buildSteps.length
+    });
   }
 
   goToPreviousStep() {
@@ -385,11 +622,11 @@ export class MinecraftThreeRenderer {
       scene.remove(this.threeState.grid);
     }
 
-    const showEdges = (this.selectedTool === 'sphere' || this.selectedTool === 'dome' || this.selectedTool === 'script')
+    const showEdges = (this.selectedTool === 'sphere' || this.selectedTool === 'dome' || this.selectedTool === 'script' || this.selectedTool === 'stairs')
       ? true
       : centeredBlocks.length <= 900;
     const blockMeshes = [];
-    const instancedThreshold = (this.selectedTool === 'sphere' || this.selectedTool === 'dome' || this.selectedTool === 'script')
+    const instancedThreshold = (this.selectedTool === 'sphere' || this.selectedTool === 'dome' || this.selectedTool === 'script' || this.selectedTool === 'stairs')
       ? Infinity
       : 1200;
 
@@ -424,7 +661,7 @@ export class MinecraftThreeRenderer {
     }
 
     renderer.render(scene, camera);
-    this.status.textContent = "Glissez horizontalement et verticalement pour tourner. Utilisez la molette pour zoomer.";
+    this.status.textContent = this.t("renderer.dragHelp");
   }
 
   createBlockMesh(group, block, showEdges) {
@@ -454,7 +691,7 @@ export class MinecraftThreeRenderer {
 
     if (showEdges) {
       const edgeColor = this.getBlockEdgeColor(block.kind);
-      const edgeOpacity = block.kind === 'sphere' ? 0.72 : 0.30;
+      const edgeOpacity = this.getBlockEdgeOpacity(block.kind);
       
       let edgesGeometry = this.threeState.edgeGeometries.get(geomKey);
       if (!edgesGeometry) {
@@ -464,7 +701,12 @@ export class MinecraftThreeRenderer {
 
       const edges = new THREE.LineSegments(
         edgesGeometry,
-        new THREE.LineBasicMaterial({ color: edgeColor, transparent: true, opacity: edgeOpacity })
+        new THREE.LineBasicMaterial({
+          color: edgeColor,
+          transparent: true,
+          opacity: edgeOpacity,
+          linewidth: this.getBlockEdgeWidth(block.kind)
+        })
       );
       edges.position.copy(mesh.position);
       edges.rotation.copy(mesh.rotation);
@@ -472,13 +714,13 @@ export class MinecraftThreeRenderer {
       group.add(edges);
       mesh.userData.edgesMesh = edges;
 
-      if (block.kind === 'sphere' || block.kind === 'stone') {
-        const outlineMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
+      if (this.hasStrongOutline(block.kind)) {
+        const outlineMat = new THREE.MeshBasicMaterial({ color: this.getStrongOutlineColor(block.kind), side: THREE.BackSide });
         const outline = new THREE.Mesh(geometry, outlineMat);
         outline.position.copy(mesh.position);
         outline.rotation.copy(mesh.rotation);
         outline.scale.set(0, 0, 0);
-        outline.userData.scaleTarget = 1.03;
+        outline.userData.scaleTarget = this.getStrongOutlineScale(block.kind);
         group.add(outline);
         mesh.userData.outlineMesh = outline;
       }
@@ -682,12 +924,27 @@ export class MinecraftThreeRenderer {
       this.threeState.materials.set(kind, mat);
       return mat;
     }
+
+    if (kind === 'dome') {
+      const texture = this.createDomePngTexture();
+      const material = new THREE.MeshStandardMaterial({
+        map: texture,
+        roughness: 0.84,
+        metalness: 0,
+        transparent: false,
+        depthWrite: true
+      });
+      this.threeState.materials.set(kind, material);
+      return material;
+    }
+
     const texture = this.createPixelTexture(palettes[cacheKey] || palettes.block);
     const isTranslucent = cacheKey === "support" || cacheKey === "glass" || cacheKey === "water";
     const material = new THREE.MeshStandardMaterial({
       map: texture,
       roughness: 0.92,
       metalness: 0,
+      side: cacheKey === "stair" ? THREE.DoubleSide : THREE.FrontSide,
       transparent: isTranslucent,
       opacity: cacheKey === "support" ? 0.42 : cacheKey === "glass" || cacheKey === "water" ? 0.72 : 1,
       depthWrite: !isTranslucent
@@ -718,6 +975,57 @@ export class MinecraftThreeRenderer {
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(1, 1);
+    return texture;
+  }
+
+  createDomePngTexture() {
+    const THREE = window.THREE;
+    const size = 32;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+
+    ctx.fillStyle = "#0ea5e9";
+    ctx.fillRect(0, 0, size, size);
+
+    for (let y = 0; y < size; y += 8) {
+      for (let x = 0; x < size; x += 8) {
+        const shifted = (x / 8 + y / 8) % 2 === 0;
+        ctx.fillStyle = shifted ? "#38bdf8" : "#0284c7";
+        ctx.fillRect(x, y, 8, 8);
+        ctx.fillStyle = "rgba(224, 242, 254, 0.35)";
+        ctx.fillRect(x + 1, y + 1, 5, 1);
+        ctx.fillRect(x + 1, y + 2, 1, 4);
+        ctx.fillStyle = "rgba(7, 89, 133, 0.42)";
+        ctx.fillRect(x + 6, y + 1, 1, 6);
+        ctx.fillRect(x + 1, y + 6, 6, 1);
+      }
+    }
+
+    ctx.strokeStyle = "rgba(12, 74, 110, 0.78)";
+    ctx.lineWidth = 1;
+    for (let line = 0.5; line <= size; line += 8) {
+      ctx.beginPath();
+      ctx.moveTo(line, 0);
+      ctx.lineTo(line, size);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, line);
+      ctx.lineTo(size, line);
+      ctx.stroke();
+    }
+
+    const pngUrl = canvas.toDataURL("image/png");
+    const texture = new THREE.TextureLoader().load(pngUrl);
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(1, 1);
+    if ("colorSpace" in texture && THREE.SRGBColorSpace) {
+      texture.colorSpace = THREE.SRGBColorSpace;
+    }
     return texture;
   }
 
@@ -832,7 +1140,7 @@ export class MinecraftThreeRenderer {
     }
 
     const label = structure.title || structure.modelUrl;
-    this.status.textContent = `Chargement de ${label}...`;
+    this.status.textContent = this.t("renderer.loading", { label });
 
     try {
       const model = await this.loadGlbModel(structure.modelUrl);
@@ -843,7 +1151,7 @@ export class MinecraftThreeRenderer {
       group.add(model);
       const bounds = new THREE.Box3().setFromObject(model);
       if (bounds.isEmpty()) {
-        this.status.textContent = "Le fichier GLB est chargé, mais aucun volume visible n'a été trouvé.";
+        this.status.textContent = this.t("renderer.emptyGlb");
         return;
       }
 
@@ -864,13 +1172,16 @@ export class MinecraftThreeRenderer {
       this.threeState.cameraDistance = Math.max(8, maxRadius * 2.4, heightSpan * 1.4);
       this.positionThreeCamera();
       renderer.render(scene, camera);
-      this.status.textContent = `${structure.title} chargé depuis ${structure.modelUrl}. Glissez horizontalement et verticalement pour tourner. Utilisez la molette pour zoomer.`;
+      this.status.textContent = this.t("renderer.loaded", {
+        title: structure.title,
+        url: structure.modelUrl
+      });
     } catch (error) {
       console.error(error);
-      const detail = error && error.message ? error.message : "erreur inconnue";
+      const detail = error && error.message ? error.message : "unknown error";
       this.status.textContent = window.location.protocol === "file:"
-        ? "Impossible de charger le GLB en file://. Lancez node dev-server.cjs puis ouvrez http://127.0.0.1:8000/index.html."
-        : `Impossible de charger le GLB : ${detail}`;
+        ? this.t("renderer.fileProtocol")
+        : this.t("renderer.loadError", { detail });
     }
   }
 

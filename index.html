@@ -11,175 +11,188 @@
 <body>
   <main class="app-shell">
     <header class="hero">
-      <h1>Minecraft Circle Builder</h1>
-      <p>Génère des cercles, porches et entrées monumentales en blocs Minecraft.</p>
+      <div class="hero-copy">
+        <h1 data-i18n="hero.title">Minecraft Circle Builder</h1>
+        <p data-i18n="hero.subtitle">Génère des cercles, porches et entrées monumentales en blocs Minecraft.</p>
+      </div>
+      <div class="language-switcher" role="group" aria-label="Choisir la langue" data-i18n-aria-label="language.aria">
+        <button type="button" class="language-button" data-lang="fr" aria-pressed="true" title="Français" data-i18n-title="language.frTitle">
+          <span class="language-flag flag-fr" aria-hidden="true"></span>
+          <span>FR</span>
+        </button>
+        <button type="button" class="language-button" data-lang="en" aria-pressed="false" title="English" data-i18n-title="language.enTitle">
+          <span class="language-flag flag-gb" aria-hidden="true"></span>
+          <span>EN</span>
+        </button>
+      </div>
     </header>
     <section class="workspace">
       <aside class="panel controls-panel">
         <div class="tool-selector-section">
-          <h2>Outil à utiliser</h2>
+          <h2 data-i18n="tool.selectTitle">Outil à utiliser</h2>
           <div class="select-wrapper">
             <select id="tool-select" name="tool" class="menu-select">
-              <option value="circle">⭕ Cercle</option>
-              <option value="sphere">🌐 Sphère</option>
-              <option value="dome">🏟️ Dôme</option>
-              <option value="porch">⛩️ Porche / Entrée</option>
-              <option value="stairs">📶 Escalier</option>
-              <option value="script">✍️ Script</option>
-              <option value="structures">🏗️ Structures</option>
+              <option value="circle" data-i18n="tool.circleOption">⭕ Cercle</option>
+              <option value="sphere" data-i18n="tool.sphereOption">🌐 Sphère</option>
+              <option value="dome" data-i18n="tool.domeOption">🏟️ Dôme</option>
+              <option value="porch" data-i18n="tool.porchOption">⛩️ Porche / Entrée</option>
+              <option value="stairs" data-i18n="tool.stairsOption">📶 Escalier</option>
+              <option value="script" data-i18n="tool.scriptOption">✍️ Script</option>
+              <option value="structures" data-i18n="tool.structuresOption">🏗️ Structures</option>
             </select>
           </div>
         </div>
         <div class="tool-settings-section">
-          <h3>Paramètres</h3>
+          <h3 data-i18n="settings.title">Paramètres</h3>
           <form id="builder-form" novalidate>
           <div class="tool-controls" data-tool-target="circle">
-            <label for="diameter-input">Diamètre (en blocs)</label>
+            <label for="diameter-input" data-i18n="input.diameter">Diamètre (en blocs)</label>
             <input id="diameter-input" name="diameter" type="number" min="1" max="256" step="1" value="15" required>
           </div>
           <div class="tool-controls hidden" data-tool-target="sphere">
-            <label for="sphere-layer-input">Couche de la sphère</label>
+            <label for="sphere-layer-input" data-i18n="input.sphereLayer">Couche de la sphère</label>
             <input id="sphere-layer-input" type="range" min="1" max="1" step="1" value="1">
             <p id="sphere-layer-label" class="sphere-layer-label">Couche 1 / 1</p>
             <div class="input-row">
-              <label for="sphere-solid-toggle">Sphère pleine</label>
+              <label for="sphere-solid-toggle" data-i18n="input.sphereSolid">Sphère pleine</label>
               <input id="sphere-solid-toggle" name="sphere-solid" type="checkbox">
             </div>
-            <p class="hint">Faites glisser pour voir chaque coupe de la sphère.</p>
+            <p class="hint" data-i18n="hint.sphereSlider">Faites glisser pour voir chaque coupe de la sphère.</p>
           </div>
           <div class="tool-controls hidden" data-tool-target="porch">
-            <label for="porch-width-input">Largeur (en blocs)</label>
+            <label for="porch-width-input" data-i18n="input.width">Largeur (en blocs)</label>
             <input id="porch-width-input" name="porch-width" type="number" min="5" max="101" step="1" value="17" required>
-            <label for="porch-height-input">Hauteur (en blocs)</label>
+            <label for="porch-height-input" data-i18n="input.height">Hauteur (en blocs)</label>
             <input id="porch-height-input" name="porch-height" type="number" min="5" max="120" step="1" value="14" required>
-            <label for="porch-thickness-input">Épaisseur du cadre (en blocs)</label>
+            <label for="porch-thickness-input" data-i18n="input.frameThickness">Épaisseur du cadre (en blocs)</label>
             <input id="porch-thickness-input" name="porch-thickness" type="number" min="1" max="24" step="1" value="2" required>
-            <label for="porch-style-input">Style du haut</label>
+            <label for="porch-style-input" data-i18n="input.topStyle">Style du haut</label>
             <div class="select-wrapper">
               <select id="porch-style-input" name="porch-style" class="menu-select">
-                <option value="rounded">⬤ Arrondi</option>
-                <option value="pointed">▲ En pointe</option>
-                <option value="medieval">🏰 Médiéval</option>
+                <option value="rounded" data-i18n="porch.roundedOption">⬤ Arrondi</option>
+                <option value="pointed" data-i18n="porch.pointedOption">▲ En pointe</option>
+                <option value="medieval" data-i18n="porch.medievalOption">🏰 Médiéval</option>
               </select>
             </div>
           </div>
           <div class="tool-controls hidden" data-tool-target="dome">
-            <label for="dome-diameter-input">Diamètre au sol (en blocs)</label>
+            <label for="dome-diameter-input" data-i18n="input.groundDiameter">Diamètre au sol (en blocs)</label>
             <input id="dome-diameter-input" name="dome-diameter" type="number" min="3" max="96" step="1" value="21" required>
-            <label for="dome-stretch-input">Étirement vertical</label>
+            <label for="dome-stretch-input" data-i18n="input.verticalStretch">Étirement vertical</label>
             <input id="dome-stretch-input" name="dome-stretch" type="range" min="0.5" max="3" step="0.1" value="1.4">
             <p id="dome-stretch-label" class="sphere-layer-label">Étirement ×1.4</p>
-            <label for="dome-layer-input">Couche du dôme</label>
+            <label for="dome-layer-input" data-i18n="input.domeLayer">Couche du dôme</label>
             <input id="dome-layer-input" type="range" min="1" max="1" step="1" value="1">
             <p id="dome-layer-label" class="sphere-layer-label">Couche 1 / 1</p>
             <div class="input-row">
-              <label for="dome-solid-toggle">Dôme plein</label>
+              <label for="dome-solid-toggle" data-i18n="input.domeSolid">Dôme plein</label>
               <input id="dome-solid-toggle" name="dome-solid" type="checkbox">
             </div>
           </div>
           <div class="tool-controls hidden" data-tool-target="stairs">
-            <label for="stairs-height-input">Hauteur totale (en blocs)</label>
+            <label for="stairs-height-input" data-i18n="input.totalHeight">Hauteur totale (en blocs)</label>
             <input id="stairs-height-input" name="stairs-height" type="number" min="1" max="128" step="1" value="12" required>
-            <label for="stairs-width-input">Largeur (en blocs)</label>
+            <label for="stairs-width-input" data-i18n="input.width">Largeur (en blocs)</label>
             <input id="stairs-width-input" name="stairs-width" type="number" min="1" max="16" step="1" value="5" required>
-            <label for="stairs-type-input">Type d'escalier</label>
+            <label for="stairs-type-input" data-i18n="input.stairType">Type d'escalier</label>
             <div class="select-wrapper">
               <select id="stairs-type-input" name="stairs-type" class="menu-select">
-                <option value="straight">➞ Tout droit</option>
-                <option value="spiral">🌀 En colimaçon</option>
-                <option value="curved">↪️ Arrondi / Courbé</option>
+                <option value="straight" data-i18n="stairs.straightOption">➞ Tout droit</option>
+                <option value="spiral" data-i18n="stairs.spiralOption">🌀 En colimaçon</option>
+                <option value="curved" data-i18n="stairs.curvedOption">↪️ Arrondi / Courbé</option>
               </select>
             </div>
             <div id="stairs-turn-control" class="stair-turn-control hidden">
-              <label id="stairs-turn-label" for="stairs-turn-input">Sens de rotation</label>
+              <label id="stairs-turn-label" for="stairs-turn-input" data-i18n="input.rotationDirection">Sens de rotation</label>
               <div class="select-wrapper">
                 <select id="stairs-turn-input" name="stairs-turn" class="menu-select">
-                  <option value="right">➡️ Droite</option>
-                  <option value="left">⬅️ Gauche</option>
+                  <option value="right" data-i18n="direction.rightOption">➡️ Droite</option>
+                  <option value="left" data-i18n="direction.leftOption">⬅️ Gauche</option>
                 </select>
               </div>
             </div>
           </div>
           <div class="tool-controls hidden" data-tool-target="script">
-            <label for="script-text-input">Texte</label>
+            <label for="script-text-input" data-i18n="input.text">Texte</label>
             <input id="script-text-input" name="script-text" type="text" maxlength="32" value="MINECRAFT" required>
-            <label for="script-size-input">Taille</label>
+            <label for="script-size-input" data-i18n="input.size">Taille</label>
             <input id="script-size-input" name="script-size" type="number" min="1" max="8" step="1" value="2" required>
-            <label for="script-weight-input">Finesse du trait</label>
+            <label for="script-weight-input" data-i18n="input.strokeWeight">Finesse du trait</label>
             <input id="script-weight-input" name="script-weight" type="range" min="1" max="3" step="1" value="1">
             <p id="script-weight-label" class="sphere-layer-label">Trait fin</p>
-            <label for="script-spacing-input">Espacement</label>
+            <label for="script-spacing-input" data-i18n="input.spacing">Espacement</label>
             <input id="script-spacing-input" name="script-spacing" type="number" min="0" max="8" step="1" value="1" required>
           </div>
           <div class="tool-controls hidden" data-tool-target="structures">
-            <label for="structure-selector">Structures disponibles</label>
+            <label for="structure-selector" data-i18n="structures.available">Structures disponibles</label>
             <div class="structures-container">
               <div class="structure-list-wrapper">
-                <div id="structure-list" class="structure-list" aria-label="Liste des structures disponibles"></div>
-                <p id="structure-loading" class="hint structures-loading hidden">Chargement des structures...</p>
+                <div id="structure-list" class="structure-list" aria-label="Liste des structures disponibles" data-i18n-aria-label="structures.listAria"></div>
+                <p id="structure-loading" class="hint structures-loading hidden" data-i18n="structures.loading">Chargement des structures...</p>
               </div>
             </div>
-            <p class="hint">Les structures affichées correspondent aux fichiers GLB présents dans le dossier du site.</p>
+            <p class="hint" data-i18n="structures.hint">Les structures affichées correspondent aux fichiers GLB présents dans le dossier du site.</p>
           </div>
           <div class="input-row input-row-submit">
-            <button type="submit">Générer</button>
+            <button type="submit" data-i18n="button.generate">Générer</button>
           </div>
-          <p id="tool-hint" class="hint">Astuce : la largeur du porche est ajustée automatiquement à une valeur impaire pour garder une symétrie propre.</p>
+          <p id="tool-hint" class="hint" data-i18n="toolHint.porch">Astuce : la largeur du porche est ajustée automatiquement à une valeur impaire pour garder une symétrie propre.</p>
         </form>
         <div id="stats" class="stats" aria-live="polite"></div>
       </aside>
       <section class="panel canvas-panel">
         <div id="stairs-details" class="stairs-details hidden" aria-live="polite">
           <div class="detail-block detail-block-3d">
-            <h3 id="three-view-title">Vue 3D</h3>
-            <div id="stairs-3d-view" class="stairs-3d-view" role="img" aria-label="Vue 3D de la structure"></div>
+            <h3 id="three-view-title" data-i18n="view.3d">Vue 3D</h3>
+            <div id="stairs-3d-view" class="stairs-3d-view" role="img" aria-label="Vue 3D de la structure" data-i18n-aria-label="view.3dAria"></div>
             <div class="three-footer">
               <p id="stairs-3d-status" class="three-status"></p>
               <div id="construction-controls" class="construction-controls hidden">
-                <button id="prev-step-button" type="button" class="secondary-button">◀ Précédent</button>
-                <span id="step-counter" class="step-counter">Étape 1 / 1</span>
-                <button id="next-step-button" type="button" class="secondary-button">Suivant ▶</button>
+                <button id="prev-step-button" type="button" class="secondary-button" data-i18n="button.previous">◀ Précédent</button>
+                <span id="step-counter" class="step-counter" data-i18n="step.initial">Étape 1 / 1</span>
+                <button id="next-step-button" type="button" class="secondary-button" data-i18n="button.next">Suivant ▶</button>
               </div>
-              <button id="toggle-supports-3d" type="button" class="secondary-button">Masquer les supports (3D)</button>
+              <button id="toggle-supports-3d" type="button" class="secondary-button" data-i18n="button.hideSupports">Masquer les supports (3D)</button>
             </div>
           </div>
         </div>
         <div id="plan-views" class="plan-views">
           <div class="plan-view-block">
             <div class="panel-title-row">
-              <h2>Vue de dessus</h2>
+              <h2 data-i18n="view.top">Vue de dessus</h2>
               <div class="panel-actions">
-                <button id="export-button" type="button" class="secondary-button">Exporter PNG</button>
-                <button id="clear-button" type="button" class="ghost-button">Effacer</button>
+                <button id="copy-commands-button" type="button" class="secondary-button" data-i18n="button.copyCommands">Copie Commande</button>
+                <button id="export-button" type="button" class="secondary-button" data-i18n="button.exportPng">Exporter PNG</button>
+                <button id="clear-button" type="button" class="ghost-button" data-i18n="button.clear">Effacer</button>
               </div>
             </div>
             <div class="grid-wrapper">
-              <div id="circle-grid" class="circle-grid" role="img" aria-label="Grille de construction Minecraft"></div>
+              <div id="circle-grid" class="circle-grid" role="img" aria-label="Grille de construction Minecraft" data-i18n-aria-label="view.gridAria"></div>
             </div>
           </div>
           <div id="side-detail-block" class="detail-block hidden">
-            <h3>Vue de côté</h3>
+            <h3 data-i18n="view.side">Vue de côté</h3>
             <div class="grid-wrapper detail-grid-wrapper">
-              <div id="side-grid" class="circle-grid side-grid" role="img" aria-label="Vue de côté de l'escalier"></div>
+              <div id="side-grid" class="circle-grid side-grid" role="img" aria-label="Vue de côté de l'escalier" data-i18n-aria-label="view.sideAria"></div>
             </div>
           </div>
         </div>
         <p class="legend">
-          <span><i class="swatch swatch-stair"></i> Bloc escalier / marche</span>
-          <span><i class="swatch swatch-slab"></i> Dalle / palier plat</span>
-          <span><i class="swatch swatch-platform"></i> Bloc de transition</span>
-          <span><i class="swatch swatch-core"></i> Bloc plein / pilier</span>
-          <span><i class="swatch swatch-dome"></i> Bloc de dôme</span>
-          <span><i class="swatch swatch-script"></i> Bloc de script</span>
-          <span><i class="swatch swatch-support"></i> Remplissage sécurité</span>
-          <span><i class="swatch swatch-empty"></i> Case vide</span>
+          <span data-i18n-html="legend.stair"><i class="swatch swatch-stair"></i> Bloc escalier / marche</span>
+          <span data-i18n-html="legend.slab"><i class="swatch swatch-slab"></i> Dalle / palier plat</span>
+          <span data-i18n-html="legend.platform"><i class="swatch swatch-platform"></i> Bloc de transition</span>
+          <span data-i18n-html="legend.core"><i class="swatch swatch-core"></i> Bloc plein / pilier</span>
+          <span data-i18n-html="legend.dome"><i class="swatch swatch-dome"></i> Bloc de dôme</span>
+          <span data-i18n-html="legend.script"><i class="swatch swatch-script"></i> Bloc de script</span>
+          <span data-i18n-html="legend.support"><i class="swatch swatch-support"></i> Remplissage sécurité</span>
+          <span data-i18n-html="legend.empty"><i class="swatch swatch-empty"></i> Case vide</span>
         </p>
         <p id="export-status" class="export-status" aria-live="polite"></p>
         <!-- <pre id="ascii-output" class="ascii-output" aria-label="Aperçu texte de la structure"></pre> -->
       </section>
     </section>
     <section class="panel future-panel">
-      <h2>Services Minecraft à venir</h2>
+      <h2 data-i18n="future.title">Services Minecraft à venir</h2>
       <div id="future-services" class="future-services"></div>
     </section>
   </main>

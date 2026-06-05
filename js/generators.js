@@ -95,6 +95,39 @@ function createBlock3d(x, y, z, kind = "block", width = 1, height = 1, depth = 1
   return { x, y, z, kind, width, height, depth, rotationY };
 }
 
+function createLayerBlocks3d(layers, kind, getY) {
+  if (!layers || layers.length === 0) {
+    return [];
+  }
+
+  const blocks = [];
+  const rows = layers[0].length;
+  const cols = layers[0][0].length;
+  const centerX = (cols - 1) / 2;
+  const centerZ = (rows - 1) / 2;
+
+  for (let layerIndex = 0; layerIndex < layers.length; layerIndex += 1) {
+    const layer = layers[layerIndex];
+    for (let z = 0; z < rows; z += 1) {
+      for (let x = 0; x < cols; x += 1) {
+        if (isBlockCell(layer[z][x])) {
+          blocks.push(createBlock3d(
+            x - centerX,
+            getY(layerIndex),
+            z - centerZ,
+            kind,
+            1,
+            1,
+            1
+          ));
+        }
+      }
+    }
+  }
+
+  return blocks;
+}
+
 function createStairBlock3d(x, step, z, rotationY = 0) {
   const block = createBlock3d(
     x,
@@ -172,6 +205,41 @@ function createStairBaseBlocks(x, z, baseHeight) {
   return createSupportColumnBlocks(x, z, baseHeight);
 }
 
+function createSupportColumnAroundExistingBlocks(blocks, x, z, height) {
+  const epsilon = 0.001;
+  if (height <= epsilon) {
+    return [];
+  }
+
+  const columnKey = getColumnKey(x, z);
+  const intervals = blocks
+    .filter((block) => getColumnKey(block.x, block.z) === columnKey)
+    .map((block) => ({
+      start: Math.max(0, getBlockBottomY(block)),
+      end: Math.min(height, getBlockTopY(block))
+    }))
+    .filter((interval) => interval.end > 0 && interval.start < height)
+    .sort((a, b) => a.start - b.start || b.end - a.end);
+
+  const supportBlocks = [];
+  let cursor = 0;
+  for (const interval of intervals) {
+    if (interval.start > cursor + epsilon) {
+      supportBlocks.push(...createSupportSegmentBlocks(x, z, cursor, interval.start));
+    }
+    cursor = Math.max(cursor, interval.end);
+    if (cursor >= height - epsilon) {
+      break;
+    }
+  }
+
+  if (cursor < height - epsilon) {
+    supportBlocks.push(...createSupportSegmentBlocks(x, z, cursor, height));
+  }
+
+  return supportBlocks;
+}
+
 function getBlockBottomY(block) {
   return block.y - block.height / 2;
 }
@@ -187,6 +255,10 @@ function getColumnKey(x, z) {
 function quantizeRotation90(rotationY) {
   const quarterTurn = Math.PI / 2;
   return Math.round(rotationY / quarterTurn) * quarterTurn;
+}
+
+function getVectorAngle(directionX, directionZ) {
+  return Math.atan2(directionZ, directionX);
 }
 
 function getStairRotationFromVector(directionX, directionZ) {
@@ -289,8 +361,9 @@ function getSpiralStepPositions(gridRadius, innerRadius, walkwayWidth, sectorSta
   const outerRadius = innerRadius + walkwayWidth + 0.35;
 
   for (let z = -gridRadius; z <= gridRadius; z += 1) {
+    const z2 = z * z;
     for (let x = -gridRadius; x <= gridRadius; x += 1) {
-      const radius = Math.hypot(x, z);
+      const radius = Math.sqrt(x * x + z2);
       if (radius < innerRadius || radius > outerRadius) {
         continue;
       }
@@ -311,23 +384,23 @@ function getSpiralStepPositions(gridRadius, innerRadius, walkwayWidth, sectorSta
   }
 
   const result = Array.from(positions.values());
-  const radii = result.map((position) => Math.hypot(position.x, position.z));
+  const radii = result.map((position) => Math.sqrt(position.x * position.x + position.z * position.z));
   const minRadius = Math.min(...radii);
   const maxRadius = Math.max(...radii);
 
   for (const position of result) {
-    const radius = Math.hypot(position.x, position.z);
+    const radius = Math.sqrt(position.x * position.x + position.z * position.z);
     position.support = radius <= minRadius + 0.45 || radius >= maxRadius - 0.45;
   }
 
   return result.sort((a, b) => {
     const angleA = normalizeAngle(Math.atan2(a.z, a.x) - centerAngle);
     const angleB = normalizeAngle(Math.atan2(b.z, b.x) - centerAngle);
-    return Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z) || angleA - angleB;
+    return Math.sqrt(a.x * a.x + a.z * a.z) - Math.sqrt(b.x * b.x + b.z * b.z) || angleA - angleB;
   });
 }
 
-function selectSpiralStairBand(positions, targetAngle, walkwayWidth, nextPositions = [], fallbackRotation = 0) {
+function selectSpiralStairBand(positions, sectorAngle, travelAngle, walkwayWidth, nextPositions = [], fallbackRotation = 0) {
   const selected = new Map();
   if (positions.length === 0) {
     return selected;
@@ -335,9 +408,10 @@ function selectSpiralStairBand(positions, targetAngle, walkwayWidth, nextPositio
 
   const nextKeys = new Set(nextPositions.map((position) => getPositionKey(position.x, position.z)));
   for (const position of positions) {
-    const directions = getAdjacentDirections(position.x, position.z, nextKeys, targetAngle);
-    if (directions.length === 1) {
-      const direction = directions[0];
+    const directions = getAdjacentDirections(position.x, position.z, nextKeys, travelAngle);
+    const validDirections = directions.filter((direction) => direction.score <= Math.PI * 0.58);
+    if (validDirections.length === 1) {
+      const direction = validDirections[0];
       selected.set(
         getPositionKey(position.x, position.z),
         {
@@ -345,21 +419,26 @@ function selectSpiralStairBand(positions, targetAngle, walkwayWidth, nextPositio
           rotationY: getStairRotationFromVector(direction.x, direction.z)
         }
       );
-    } else if (directions.length > 1) {
+    } else if (validDirections.length > 1) {
       selected.set(getPositionKey(position.x, position.z), { kind: "platform" });
     }
   }
 
-  if (selected.size > 0) {
-    return selected;
-  }
-
-  const radii = positions.map((position) => Math.hypot(position.x, position.z));
+  const radii = positions.map((position) => Math.sqrt(position.x * position.x + position.z * position.z));
   const minRadius = Math.min(...radii);
   const maxRadius = Math.max(...radii);
   for (let band = 0; band < walkwayWidth; band += 1) {
     const ratio = walkwayWidth === 1 ? 0.5 : band / (walkwayWidth - 1);
     const targetRadius = minRadius + (maxRadius - minRadius) * ratio;
+    const hasStairForBand = positions.some((position) => {
+      const key = getPositionKey(position.x, position.z);
+      const selectedTransition = selected.get(key);
+      return selectedTransition?.kind === "stair" && Math.abs(Math.sqrt(position.x * position.x + position.z * position.z) - targetRadius) <= 0.75;
+    });
+    if (hasStairForBand) {
+      continue;
+    }
+
     let bestPosition = null;
     let bestScore = Infinity;
 
@@ -369,8 +448,8 @@ function selectSpiralStairBand(positions, targetAngle, walkwayWidth, nextPositio
         continue;
       }
 
-      const radius = Math.hypot(position.x, position.z);
-      const angleOffset = Math.abs(normalizeAngle(Math.atan2(position.z, position.x) - targetAngle));
+      const radius = Math.sqrt(position.x * position.x + position.z * position.z);
+      const angleOffset = Math.abs(normalizeAngle(Math.atan2(position.z, position.x) - sectorAngle));
       const score = Math.abs(radius - targetRadius) * 1.35 + angleOffset * 4;
       if (score < bestScore) {
         bestScore = score;
@@ -388,7 +467,7 @@ function selectSpiralStairBand(positions, targetAngle, walkwayWidth, nextPositio
 
   if (selected.size === 0) {
     const closest = positions.reduce((best, position) => {
-      const angleOffset = Math.abs(normalizeAngle(Math.atan2(position.z, position.x) - targetAngle));
+      const angleOffset = Math.abs(normalizeAngle(Math.atan2(position.z, position.x) - sectorAngle));
       return !best || angleOffset < best.angleOffset ? { position, angleOffset } : best;
     }, null);
     if (closest) {
@@ -402,48 +481,56 @@ function selectSpiralStairBand(positions, targetAngle, walkwayWidth, nextPositio
   return selected;
 }
 
-function selectCurvedStairBand(positions, targetAngle, pivotX, pivotY, mirror, width, nextPositions = []) {
+function selectCurvedStairBand(positions, sectorAngle, travelAngle, pivotX, pivotY, mirror, width, nextPositions = []) {
   const selected = new Map();
-  if (positions.length === 0) {
+  if (positions.length === 0 || nextPositions.length === 0) {
     return selected;
   }
 
   const nextKeys = new Set(nextPositions.map((position) => getPositionKey(position.x, position.y)));
   for (const position of positions) {
-    const directions = getAdjacentDirections(position.x, position.y, nextKeys, targetAngle);
-    if (directions.length === 1) {
-      const direction = directions[0];
-      selected.set(
-        getPositionKey(position.x, position.y),
-        {
-          kind: "stair",
-          rotationY: getStairRotationFromVector(direction.x, direction.z)
-        }
-      );
-    } else if (directions.length > 1) {
+    const directions = getAdjacentDirections(position.x, position.y, nextKeys, travelAngle);
+    const validDirections = directions.filter((direction) => direction.score <= Math.PI * 0.58);
+    if (validDirections.length === 1) {
+      const direction = validDirections[0];
+      selected.set(getPositionKey(position.x, position.y), {
+        kind: "stair",
+        rotationY: getStairRotationFromVector(direction.x, direction.z)
+      });
+    } else if (validDirections.length > 1) {
       selected.set(getPositionKey(position.x, position.y), { kind: "platform" });
     }
   }
 
-  if (selected.size > 0) {
-    return selected;
-  }
-
-  const radii = positions.map((position) => Math.hypot(
-    (position.x - pivotX) * mirror,
-    position.y - pivotY
-  ));
+  const radii = positions.map((position) => {
+    const nx = (position.x - pivotX) * mirror;
+    const ny = position.y - pivotY;
+    return Math.sqrt(nx * nx + ny * ny);
+  });
   const minRadius = Math.min(...radii);
   const maxRadius = Math.max(...radii);
   const fallbackRotation = getStairRotationFromVector(
-    -Math.sin(targetAngle) * mirror,
-    Math.cos(targetAngle)
+    Math.cos(travelAngle),
+    Math.sin(travelAngle)
   );
 
   for (let band = 0; band < width; band += 1) {
     const ratio = width === 1 ? 0.5 : band / (width - 1);
     const targetRadius = maxRadius - (maxRadius - minRadius) * ratio;
+    const hasStairForBand = positions.some((position) => {
+      const key = getPositionKey(position.x, position.y);
+      const selectedTransition = selected.get(key);
+      const normalizedX = (position.x - pivotX) * mirror;
+      const normalizedY = position.y - pivotY;
+      const currentRadius = Math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY);
+      return selectedTransition?.kind === "stair" && Math.abs(currentRadius - targetRadius) <= 0.75;
+    });
+    if (hasStairForBand) {
+      continue;
+    }
+
     let bestPosition = null;
+    let bestDirection = null;
     let bestScore = Infinity;
 
     for (const position of positions) {
@@ -451,42 +538,344 @@ function selectCurvedStairBand(positions, targetAngle, pivotX, pivotY, mirror, w
       if (selected.has(key)) {
         continue;
       }
+      const directions = getAdjacentDirections(position.x, position.y, nextKeys, travelAngle);
+      const validDirections = directions.filter((direction) => direction.score <= Math.PI * 0.58);
+      if (validDirections.length === 0) {
+        continue;
+      }
 
       const normalizedX = (position.x - pivotX) * mirror;
       const normalizedY = position.y - pivotY;
-      const currentRadius = Math.hypot(normalizedX, normalizedY);
-      const angleOffset = Math.abs(normalizeAngle(Math.atan2(normalizedY, normalizedX) - targetAngle));
+      const currentRadius = Math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY);
+      const angleOffset = Math.abs(normalizeAngle(Math.atan2(normalizedY, normalizedX) - sectorAngle));
       const score = Math.abs(currentRadius - targetRadius) * 1.35 + angleOffset * 4;
+
       if (score < bestScore) {
         bestScore = score;
         bestPosition = position;
+        bestDirection = validDirections[0];
       }
     }
 
     if (bestPosition) {
-      selected.set(getPositionKey(bestPosition.x, bestPosition.y), {
+      const key = getPositionKey(bestPosition.x, bestPosition.y);
+      selected.set(key, {
         kind: "stair",
-        rotationY: fallbackRotation
-      });
-    }
-  }
-
-  if (selected.size === 0) {
-    const closest = positions.reduce((best, position) => {
-      const normalizedX = (position.x - pivotX) * mirror;
-      const normalizedY = position.y - pivotY;
-      const angleOffset = Math.abs(normalizeAngle(Math.atan2(normalizedY, normalizedX) - targetAngle));
-      return !best || angleOffset < best.angleOffset ? { position, angleOffset } : best;
-    }, null);
-    if (closest) {
-      selected.set(getPositionKey(closest.position.x, closest.position.y), {
-        kind: "stair",
-        rotationY: fallbackRotation
+        rotationY: bestDirection
+          ? getStairRotationFromVector(bestDirection.x, bestDirection.z)
+          : fallbackRotation
       });
     }
   }
 
   return selected;
+}
+
+function pruneCurvedUnsafeSurfaces(blocks3d, placements, cells, margin, pivotX, pivotY) {
+  const surfaceKinds = new Set(["stair", "slab", "platform"]);
+  const surfaceBlocks = blocks3d.filter((block) => surfaceKinds.has(block.kind));
+  const activeMap = new Map(surfaceBlocks.map((block) => [getSurfaceKey(block), block]));
+  const protectedLandingKeys = getProtectedStairLandingKeys(activeMap);
+  const removedKeys = new Set();
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+
+    for (const [key, block] of activeMap.entries()) {
+      if (block.kind === "slab" && hasUnsafeLowerNeighbor(block, activeMap, protectedLandingKeys)) {
+        activeMap.delete(key);
+        removedKeys.add(key);
+        changed = true;
+      }
+    }
+
+  }
+
+  const keptSurfaceKeys = new Set(activeMap.keys());
+  const neededColumns = new Set(
+    [...keptSurfaceKeys].map((key) => key.substring(0, key.lastIndexOf(",")))
+  );
+  const filteredBlocks = blocks3d.filter((block) => {
+    if (surfaceKinds.has(block.kind)) {
+      return keptSurfaceKeys.has(getSurfaceKey(block));
+    }
+    if (block.kind === "support") {
+      return neededColumns.has(getColumnKey(block.x, block.z));
+    }
+    return true;
+  });
+
+  placements.splice(0, placements.length, ...placements.filter((placement) => {
+    const key = getSurfaceKey({
+      x: placement.x,
+      z: placement.z,
+      step: placement.step
+    });
+    return keptSurfaceKeys.has(key);
+  }));
+
+  for (const row of cells) {
+    for (let col = 0; col < row.length; col += 1) {
+      if (surfaceKinds.has(getCellKind(row[col]))) {
+        row[col] = false;
+      }
+    }
+  }
+
+  for (const placement of placements) {
+    const row = Math.round(placement.z + pivotY + margin);
+    const col = Math.round(placement.x + pivotX + margin);
+    if (row < 0 || row >= cells.length || col < 0 || col >= cells[row].length) {
+      continue;
+    }
+    cells[row][col] = placement.kind === "stair"
+      ? createStepCell(placement.step)
+      : placement.kind === "platform"
+        ? createPlatformCell(placement.step)
+        : createSlabCell(placement.step);
+  }
+
+  return {
+    blocks3d: filteredBlocks,
+    supportUnitCount: filteredBlocks.filter((block) => block.kind === "support").length,
+    stairBlockCount: filteredBlocks.filter((block) => block.kind === "stair").length,
+    slabBlockCount: filteredBlocks.filter((block) => block.kind === "slab").length,
+    platformBlockCount: filteredBlocks.filter((block) => block.kind === "platform").length
+  };
+}
+
+function getProtectedStairLandingKeys(surfaceMap) {
+  const protectedKeys = new Set();
+  for (const block of surfaceMap.values()) {
+    if (block.kind !== "stair") {
+      continue;
+    }
+    const forward = getStairForwardGridVector(block.rotationY || 0);
+    protectedKeys.add(`${Math.round(block.x) - forward.x},${Math.round(block.z) - forward.z},${block.step}`);
+    protectedKeys.add(`${Math.round(block.x) + forward.x},${Math.round(block.z) + forward.z},${block.step + 1}`);
+  }
+  return protectedKeys;
+}
+
+function hasUnsafeLowerNeighbor(block, surfaceMap, protectedLandingKeys) {
+  if (protectedLandingKeys.has(getSurfaceKey(block))) {
+    return false;
+  }
+
+  if (block.step <= 1) {
+    return false;
+  }
+
+  const x = Math.round(block.x);
+  const z = Math.round(block.z);
+  const lowerStep = block.step - 1;
+  const checks = [
+    { x: 0, z: 0 },
+    { x: 1, z: 0 },
+    { x: -1, z: 0 },
+    { x: 0, z: 1 },
+    { x: 0, z: -1 }
+  ];
+
+  for (const check of checks) {
+    const lower = surfaceMap.get(`${x + check.x},${z + check.z},${lowerStep}`);
+    if (!lower) {
+      continue;
+    }
+    if (check.x === 0 && check.z === 0) {
+      return true;
+    }
+    if (lower.kind !== "stair") {
+      return true;
+    }
+    const forward = getStairForwardGridVector(lower.rotationY || 0);
+    if (x - Math.round(lower.x) !== forward.x || z - Math.round(lower.z) !== forward.z) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function getSurfaceKey(block) {
+  return `${Math.round(block.x)},${Math.round(block.z)},${block.step}`;
+}
+
+function repairCurvedHeightJumps(blocks3d, placements, cells, margin, pivotX, pivotY) {
+  const surfaceKinds = new Set(["stair", "slab", "platform"]);
+  const placementMap = new Map(placements.map((placement) => [
+    getSurfaceKey({ x: placement.x, z: placement.z, step: placement.step }),
+    placement
+  ]));
+  const removedKeys = new Set();
+  const activeMap = new Map(
+    blocks3d
+      .filter((block) => surfaceKinds.has(block.kind))
+      .map((block) => [getSurfaceKey(block), block])
+  );
+
+  let changed = true;
+  let pass = 0;
+  while (changed && pass < 6) {
+    pass += 1;
+    changed = false;
+
+    const sortedBlocks = [...activeMap.values()].sort((a, b) => b.step - a.step);
+    for (const block of sortedBlocks) {
+      if ((block.kind !== "slab" && block.kind !== "platform") || block.step <= 1) {
+        continue;
+      }
+
+      const key = getSurfaceKey(block);
+      if (hasUnresolvedHeightJump(block, activeMap)) {
+        activeMap.delete(key);
+        removedKeys.add(key);
+        changed = true;
+      }
+    }
+
+    for (const block of activeMap.values()) {
+      if (block.kind !== "stair") {
+        continue;
+      }
+      const forward = getStairForwardGridVector(block.rotationY || 0);
+      const upperLandingKey = `${Math.round(block.x) + forward.x},${Math.round(block.z) + forward.z},${block.step + 1}`;
+      const sameLevelFrontKey = `${Math.round(block.x) + forward.x},${Math.round(block.z) + forward.z},${block.step}`;
+      const upperLanding = activeMap.get(upperLandingKey);
+      const sameLevelFront = activeMap.get(sameLevelFrontKey);
+      if (!upperLanding && sameLevelFront?.kind === "stair") {
+        block.kind = "slab";
+        block.y = getStairBaseY(block.step) + 0.25;
+        block.height = 0.5;
+        block.rotationY = 0;
+        const placement = placementMap.get(getSurfaceKey(block));
+        if (placement) {
+          placement.kind = "slab";
+        }
+        changed = true;
+      }
+    }
+  }
+
+  for (const [key, block] of activeMap.entries()) {
+    if ((block.kind === "slab" || block.kind === "platform") && hasUnresolvedHeightJump(block, activeMap)) {
+      activeMap.delete(key);
+      removedKeys.add(key);
+    }
+  }
+
+  const keptSurfaceKeys = new Set(activeMap.keys());
+  const neededColumns = new Set(
+    [...keptSurfaceKeys].map((key) => key.substring(0, key.lastIndexOf(",")))
+  );
+  const filteredBlocks = blocks3d.filter((block) => {
+    if (surfaceKinds.has(block.kind)) {
+      return keptSurfaceKeys.has(getSurfaceKey(block));
+    }
+    if (block.kind === "support") {
+      return neededColumns.has(getColumnKey(block.x, block.z));
+    }
+    return true;
+  });
+  placements.splice(0, placements.length, ...placements.filter((placement) => {
+    return keptSurfaceKeys.has(getSurfaceKey({ x: placement.x, z: placement.z, step: placement.step }));
+  }));
+
+  for (const placement of placements) {
+    const block = activeMap.get(getSurfaceKey({ x: placement.x, z: placement.z, step: placement.step }));
+    if (block) {
+      placement.kind = block.kind;
+      placement.support = placement.support || block.kind === "stair" || block.kind === "platform";
+    }
+  }
+
+  for (const row of cells) {
+    for (let col = 0; col < row.length; col += 1) {
+      if (surfaceKinds.has(getCellKind(row[col]))) {
+        row[col] = false;
+      }
+    }
+  }
+
+  for (const placement of placements) {
+    const row = Math.round(placement.z + pivotY + margin);
+    const col = Math.round(placement.x + pivotX + margin);
+    if (row < 0 || row >= cells.length || col < 0 || col >= cells[row].length) {
+      continue;
+    }
+    cells[row][col] = placement.kind === "stair"
+      ? createStepCell(placement.step)
+      : placement.kind === "platform"
+        ? createPlatformCell(placement.step)
+        : createSlabCell(placement.step);
+  }
+
+  return {
+    blocks3d: filteredBlocks,
+    supportUnitCount: filteredBlocks.filter((block) => block.kind === "support").length,
+    stairBlockCount: filteredBlocks.filter((block) => block.kind === "stair").length,
+    slabBlockCount: filteredBlocks.filter((block) => block.kind === "slab").length,
+    platformBlockCount: filteredBlocks.filter((block) => block.kind === "platform").length
+  };
+}
+
+function hasUnresolvedHeightJump(block, surfaceMap) {
+  if (block.step <= 1) {
+    return false;
+  }
+
+  const x = Math.round(block.x);
+  const z = Math.round(block.z);
+  const checks = [
+    { x: 0, z: 0 },
+    { x: 1, z: 0 },
+    { x: -1, z: 0 },
+    { x: 0, z: 1 },
+    { x: 0, z: -1 }
+  ];
+
+  for (const check of checks) {
+    const lower = surfaceMap.get(`${x + check.x},${z + check.z},${block.step - 1}`);
+    if (!lower) {
+      continue;
+    }
+    if (check.x === 0 && check.z === 0) {
+      return true;
+    }
+    if (lower.kind !== "stair" && lower.kind !== "platform") {
+      return true;
+    }
+    if (lower.kind === "platform") {
+      continue;
+    }
+    const forward = getStairForwardGridVector(lower.rotationY || 0);
+    if (x - Math.round(lower.x) !== forward.x || z - Math.round(lower.z) !== forward.z) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function createsForwardStairRun(position, rotationY, selectedKeys) {
+  const forward = getStairForwardGridVector(rotationY);
+  const previousKey = getPositionKey(position.x - forward.x, position.y - forward.z);
+  const nextKey = getPositionKey(position.x + forward.x, position.y + forward.z);
+  return selectedKeys.has(previousKey) || selectedKeys.has(nextKey);
+}
+
+function addCurvedStepPosition(stepMap, x, y, footprint) {
+  if (x >= 0 && x < footprint && y >= 0 && y < footprint) {
+    stepMap.set(getPositionKey(x, y), { x, y });
+  }
+}
+
+function getStairForwardGridVector(rotationY) {
+  return {
+    x: Math.round(Math.sin(rotationY)),
+    z: Math.round(Math.cos(rotationY))
+  };
 }
 
 function getAdjacentDirections(x, z, positionKeys, targetAngle) {
@@ -709,8 +1098,10 @@ export function generateCircleGrid(diameter) {
 
   for (let y = 0; y < size; y += 1) {
     const row = [];
+    const dy = y - center;
+    const dy2 = dy * dy;
     for (let x = 0; x < size; x += 1) {
-      const distanceToCenter = Math.hypot(x - center, y - center);
+      const distanceToCenter = Math.sqrt((x - center) ** 2 + dy2);
       const isCircleBlock = distanceToCenter <= radius && distanceToCenter > radius - 1;
       row.push(isCircleBlock);
       if (isCircleBlock) {
@@ -738,8 +1129,10 @@ export function generateSphereLayers(diameter, sphereSolid) {
 
     for (let y = 0; y < size; y += 1) {
       const row = [];
+      const dy = y - center;
+      const dy2 = dy * dy;
       for (let x = 0; x < size; x += 1) {
-        const distanceToCenter = Math.hypot(x - center, y - center);
+        const distanceToCenter = Math.sqrt((x - center) ** 2 + dy2);
         const isBlock = sphereSolid
           ? distanceToCenter <= layerRadius
           : distanceToCenter <= layerRadius && distanceToCenter > layerRadius - 1;
@@ -762,33 +1155,8 @@ export function generateSphereBlocks3d(layers) {
     return [];
   }
 
-  const blocks = [];
-  const rows = layers[0].length;
-  const cols = layers[0][0].length;
-  const centerX = (cols - 1) / 2;
-  const centerZ = (rows - 1) / 2;
   const centerY = (layers.length - 1) / 2;
-
-  for (let layerIndex = 0; layerIndex < layers.length; layerIndex += 1) {
-    const layer = layers[layerIndex];
-    for (let z = 0; z < rows; z += 1) {
-      for (let x = 0; x < cols; x += 1) {
-        if (layer[z][x]) {
-          blocks.push(createBlock3d(
-            x - centerX,
-            layerIndex - centerY,
-            z - centerZ,
-            "sphere",
-            1,
-            1,
-            1
-          ));
-        }
-      }
-    }
-  }
-
-  return blocks;
+  return createLayerBlocks3d(layers, "sphere", (layerIndex) => layerIndex - centerY);
 }
 
 export function generateDomeLayers(diameter, heightStretch = 1, domeSolid = false) {
@@ -808,8 +1176,10 @@ export function generateDomeLayers(diameter, heightStretch = 1, domeSolid = fals
 
     for (let z = 0; z < size; z += 1) {
       const row = [];
+      const dz = z - center;
+      const dz2 = dz * dz;
       for (let x = 0; x < size; x += 1) {
-        const distanceToCenter = Math.hypot(x - center, z - center);
+        const distanceToCenter = Math.sqrt((x - center) ** 2 + dz2);
         const isBlock = domeSolid
           ? distanceToCenter <= layerRadius
           : distanceToCenter <= layerRadius && distanceToCenter > layerRadius - 1;
@@ -829,36 +1199,7 @@ export function generateDomeLayers(diameter, heightStretch = 1, domeSolid = fals
 }
 
 export function generateDomeBlocks3d(layers) {
-  if (!layers || layers.length === 0) {
-    return [];
-  }
-
-  const blocks = [];
-  const rows = layers[0].length;
-  const cols = layers[0][0].length;
-  const centerX = (cols - 1) / 2;
-  const centerZ = (rows - 1) / 2;
-
-  for (let layerIndex = 0; layerIndex < layers.length; layerIndex += 1) {
-    const layer = layers[layerIndex];
-    for (let z = 0; z < rows; z += 1) {
-      for (let x = 0; x < cols; x += 1) {
-        if (isBlockCell(layer[z][x])) {
-          blocks.push(createBlock3d(
-            x - centerX,
-            layerIndex + 0.5,
-            z - centerZ,
-            "dome",
-            1,
-            1,
-            1
-          ));
-        }
-      }
-    }
-  }
-
-  return blocks;
+  return createLayerBlocks3d(layers, "dome", (layerIndex) => layerIndex + 0.5);
 }
 
 export function generateScriptGrid(text, size = 2, weight = 1, spacing = 1) {
@@ -895,7 +1236,7 @@ export function generateScriptGrid(text, size = 2, weight = 1, spacing = 1) {
   const rows = logicalCells.length * scale + margin * 2;
   const cols = logicalWidth * scale + margin * 2;
   const cells = Array.from({ length: rows }, () => Array(cols).fill(false));
-  const blocks3d = [];
+  let blocks3d = [];
   const centerX = (cols - 1) / 2;
   const centerZ = (rows - 1) / 2;
   let blockCount = 0;
@@ -993,7 +1334,7 @@ export function generateStraightStairsGrid(height, width) {
   const rows = stepCount + margin * 2;
   const cells = Array.from({ length: rows }, () => Array(cols).fill(false));
   const buildPlan = [];
-  const blocks3d = [];
+  let blocks3d = [];
   const xOffset = (width - 1) / 2;
   let supportUnitCount = 0;
 
@@ -1059,10 +1400,10 @@ export function generateSpiralStairsGrid(height, width, direction = "right") {
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
     const exitAngle = angle + turnPerStep * 0.5 * turnSign;
-    const fallbackStairRotation = getStairRotationFromVector(
-      -Math.sin(exitAngle) * turnSign,
-      Math.cos(exitAngle) * turnSign
-    );
+    const travelX = -Math.sin(exitAngle) * turnSign;
+    const travelZ = Math.cos(exitAngle) * turnSign;
+    const travelAngle = getVectorAngle(travelX, travelZ);
+    const fallbackStairRotation = getStairRotationFromVector(travelX, travelZ);
     const sectorStart = angle - sectorHalfTurn;
     const sectorEnd = angle + sectorHalfTurn;
     const supportHeight = getStairBaseY(step);
@@ -1088,6 +1429,7 @@ export function generateSpiralStairsGrid(height, width, direction = "right") {
     const stairRotations = selectSpiralStairBand(
       stepPositions,
       exitAngle,
+      travelAngle,
       walkwayWidth,
       nextStepPositions,
       fallbackStairRotation
@@ -1114,11 +1456,11 @@ export function generateSpiralStairsGrid(height, width, direction = "right") {
       }
 
       if (isStair || isPlatform) {
-        const supportBlocks = position.support
-          ? createSupportColumnBlocks(position.x, position.z, supportHeight)
-          : createStairBaseBlocks(position.x, position.z, supportHeight);
-        blocks3d.push(...supportBlocks);
-        supportUnitCount += supportBlocks.length;
+        if (position.support) {
+          const supportBlocks = createSupportColumnAroundExistingBlocks(blocks3d, position.x, position.z, supportHeight);
+          blocks3d.push(...supportBlocks);
+          supportUnitCount += supportBlocks.length;
+        }
         if (isStair) {
           blocks3d.push(createStairBlock3d(
             position.x,
@@ -1135,7 +1477,7 @@ export function generateSpiralStairsGrid(height, width, direction = "right") {
         }
       } else {
         if (position.support) {
-          const supportBlocks = createSupportColumnBlocks(position.x, position.z, supportHeight);
+          const supportBlocks = createSupportColumnAroundExistingBlocks(blocks3d, position.x, position.z, supportHeight);
           blocks3d.push(...supportBlocks);
           supportUnitCount += supportBlocks.length;
         }
@@ -1147,7 +1489,7 @@ export function generateSpiralStairsGrid(height, width, direction = "right") {
         step,
         x: position.x,
         z: position.z,
-        support: position.support || isStair || isPlatform,
+        support: position.support,
         kind: isStair ? "stair" : isPlatform ? "platform" : "slab"
       });
     }
@@ -1159,11 +1501,10 @@ export function generateSpiralStairsGrid(height, width, direction = "right") {
     buildPlan.push({
       level: step,
       label: `Marche ${step}`,
-      detail: `Pose ${formatStairBlockCount(stepStairCount)} contre la bordure du niveau suivant, ${formatPlatformBlockCount(stepPlatformCount)} de transition, puis ${formatSlabBlockCount(stepSlabCount)} de palier ${formatStairLevel(step)}, ${sideLabel} du pilier.`
+      detail: `Pose ${formatStairBlockCount(stepStairCount)} contre la bordure du niveau suivant, ${formatPlatformBlockCount(stepPlatformCount)} de transition, puis ${formatSlabBlockCount(stepSlabCount)} de palier ${formatStairLevel(step)}, ${sideLabel} du pilier. Garde les supports sur les bordures.`
     });
   }
 
-  supportUnitCount += addGroundSupportsForFloatingBlocks(blocks3d);
   const blockCount = stairBlockCount + slabBlockCount + platformBlockCount + height + 1 + supportUnitCount;
 
   return {
@@ -1183,19 +1524,21 @@ export function generateSpiralStairsGrid(height, width, direction = "right") {
 
 export function generateCurvedStairsGrid(height, width, direction) {
   const stepCount = getStairStepCount(height);
-  const footprint = Math.max(width * 2 + stepCount, 7);
+  const angleStart = Math.PI;
+  const angleEnd = Math.PI * 1.5;
+  const totalAngle = angleEnd - angleStart;
+  const targetTreadLength = 3;
+  const radius = Math.max(width + 1, Math.ceil((stepCount * targetTreadLength) / totalAngle));
+  const footprint = Math.max(width * 2 + stepCount, radius + width + 3, 7);
   const margin = 2;
   const cols = footprint + margin * 2;
   const rows = footprint + margin * 2;
   const cells = Array.from({ length: rows }, () => Array(cols).fill(false));
   const pivotX = direction === "right" ? width : footprint - width - 1;
   const pivotY = footprint - width - 1;
-  const radius = Math.max(width + 1, Math.round(footprint * 0.55));
   const mirror = direction === "right" ? -1 : 1;
-  const angleStart = Math.PI;
-  const angleEnd = Math.PI * 1.5;
   const buildPlan = [];
-  const blocks3d = [];
+  let blocks3d = [];
   const placements = [];
   let supportUnitCount = 0;
   let stairBlockCount = 0;
@@ -1205,19 +1548,19 @@ export function generateCurvedStairsGrid(height, width, direction) {
   const stepsByLevel = Array.from({ length: stepCount + 1 }, () => new Map());
   const innerRadius = radius - width + 0.25;
   const outerRadius = radius + 0.75;
-  const totalAngle = angleEnd - angleStart;
 
   for (let y = 0; y < footprint; y += 1) {
+    const ny = y - pivotY;
+    const ny2 = ny * ny;
     for (let x = 0; x < footprint; x += 1) {
       const normalizedX = (x - pivotX) * mirror;
-      const normalizedY = y - pivotY;
-      const distance = Math.hypot(normalizedX, normalizedY);
+      const distance = Math.sqrt(normalizedX * normalizedX + ny2);
 
       if (distance < innerRadius || distance > outerRadius) {
         continue;
       }
 
-      let angle = Math.atan2(normalizedY, normalizedX);
+      let angle = Math.atan2(ny, normalizedX);
       if (angle < 0) {
         angle += Math.PI * 2;
       }
@@ -1238,10 +1581,10 @@ export function generateCurvedStairsGrid(height, width, direction) {
     const angle = (sectorStart + sectorEnd) / 2;
     const exitAngle = sectorEnd;
     const supportHeight = getStairBaseY(step);
-    const stairRotation = getStairRotationFromVector(
-      -Math.sin(exitAngle) * mirror,
-      Math.cos(exitAngle)
-    );
+    const travelX = -Math.sin(exitAngle) * mirror;
+    const travelZ = Math.cos(exitAngle);
+    const travelAngle = getVectorAngle(travelX, travelZ);
+    const stairRotation = getStairRotationFromVector(travelX, travelZ);
 
     for (let band = 0; band < width; band += 1) {
       const currentRadius = radius - band;
@@ -1256,6 +1599,7 @@ export function generateCurvedStairsGrid(height, width, direction) {
     const stairKeys = selectCurvedStairBand(
       stepPositions,
       exitAngle,
+      travelAngle,
       pivotX,
       pivotY,
       mirror,
@@ -1270,7 +1614,7 @@ export function generateCurvedStairsGrid(height, width, direction) {
       const x3d = position.x - pivotX;
       const z3d = position.y - pivotY;
       const normalizedX = x3d * mirror;
-      const distance = Math.hypot(normalizedX, z3d);
+      const distance = Math.sqrt(normalizedX * normalizedX + z3d * z3d);
       const support = distance <= innerRadius + 0.45 || distance >= outerRadius - 0.45;
       const key = getPositionKey(position.x, position.y);
       const transition = stairKeys.get(key);
@@ -1328,6 +1672,13 @@ export function generateCurvedStairsGrid(height, width, direction) {
       detail: `Pose ${formatStairBlockCount(stepStairCount)} contre la bordure du niveau suivant, ${formatPlatformBlockCount(stepPlatformCount)} de transition, puis ${formatSlabBlockCount(stepSlabCount)} de palier ${formatStairLevel(step)}, en arrondissant vers la ${CURVED_DIRECTION_LABELS[direction].toLowerCase()}.`
     });
   }
+
+  const repaired = repairCurvedHeightJumps(blocks3d, placements, cells, margin, pivotX, pivotY);
+  blocks3d = repaired.blocks3d;
+  supportUnitCount = repaired.supportUnitCount;
+  stairBlockCount = repaired.stairBlockCount;
+  slabBlockCount = repaired.slabBlockCount;
+  platformBlockCount = repaired.platformBlockCount;
 
   supportUnitCount += addGroundSupportsForFloatingBlocks(blocks3d);
   const blockCount = stairBlockCount + slabBlockCount + platformBlockCount + supportUnitCount;
